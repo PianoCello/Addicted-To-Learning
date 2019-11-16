@@ -1,6 +1,10 @@
 >  天将降大任于斯人也，必将 ~~苦其心志，劳其筋骨~~ 让其见 bug 不 bug 。
 
-###### ![沉迷学习，日渐消瘦](https://github.com/zhanghuihong/Addicted-To-Learning/blob/master/assets/learning.jpg)
+
+
+<div align="center">
+    <img src="https://github.com/zhanghuihong/Addicted-To-Learning/blob/master/assets/learning.jpg" alt="沉迷学习，日渐消瘦" width="200px">
+</div>
 
 ## Java 语言 
 

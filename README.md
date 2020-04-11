@@ -3,8 +3,9 @@
 
 
 <div align="center">
-    <img src="https://github.com/zhanghuihong/Addicted-To-Learning/blob/master/assets/learning.jpg" alt="沉迷学习，日渐消瘦" width="200px">
+    <img src="./assets/learning.jpg" alt="沉迷学习，日渐消瘦" width="200px">
 </div>
+
 
 ## Java 语言 
 
@@ -14,7 +15,7 @@
 
 - Java I/O
 
-- [并发编程](https://github.com/zhanghuihong/Addicted-To-Learning/blob/master/Java/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B.md)
+- [Java 并发编程](./docs/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B.md)
 
 - JVM
 
@@ -36,7 +37,6 @@
 
 - 八大数据结构
 - 八大基础排序
-- 查找
 
 
 
@@ -89,13 +89,19 @@
   - 分布式
   - 微服务
 
-- 缓存与 Redis
 - 消息队列与 RabbitMQ
-- 权限管理 Shiro
-- Mybatis
+
+  
+
+## 常用框架
+
+- [Spring Framework](./docs/Spring Framework.md)
 - Springboot
+- Springcloud
 - Dubbo
 - Zookeeper
+- Mybatis
+- Shiro
 
 
 

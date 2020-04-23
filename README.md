@@ -9,7 +9,7 @@
 
 ## Java 语言 
 
-- Java 基础
+- [Java 基础](./docs/Java-foundation.md)
 
 - Java 容器
 

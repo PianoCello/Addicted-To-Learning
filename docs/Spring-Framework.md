@@ -1,5 +1,3 @@
-### Spring Framework 
-
 ##### Spring 是什么？
 
 - Spring 是 Java 应用最广的一个开源框架，为了解决企业应用开发的复杂性而创建的，但现在已经不止应用于企业应用
@@ -678,7 +676,7 @@ private static void lookupCollectionByType(BeanFactory beanFactory) {
 
     
 
-##### Spring IoC 依赖查找
+##### Spring IoC 依赖查找进阶
 
 1. 单一类型依赖查找
 
@@ -815,5 +813,7 @@ private static void lookupCollectionByType(BeanFactory beanFactory) {
    | BeanCreationException           | 当 Bean 初始化过程中                       | Bean 初始化方法执行异常时                   |
    | BeanDefinitionStoreException    | 当 BeanDefinition 配置元信息非法时         | XML 配置资源无法打开时                      |
 
-   
+
+
+##### Spring IoC 依赖注入进阶
 

@@ -365,7 +365,7 @@ private static void lookupCollectionByType(BeanFactory beanFactory) {
 
    ###### BeanDefinition 的元信息如图：
 
-   ![BeanDefinition](C:/Users/zhh/Desktop/Addicted-To-Learning/assets/BeanDefinition.png)
+   ![BeanDefinition](../assets/BeanDefinition.png)
 
    ###### BeanDefinition 的构建
 

@@ -62,7 +62,7 @@ Spring 由众多设计精良模块组成，这些模块能够帮助我们快速�
 
   - 依赖注入 DI （Depend Injection），被动或自动依赖绑定的方式，无需依赖相关的额 API
 
-    ![对比](C:/Users/zhh/Desktop/Addicted-To-Learning/assets/DIvsDL.jpg)
+    ![对比](../assets/DIvsDL.jpg)
 
 - 生命周期管理
 

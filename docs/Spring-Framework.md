@@ -40,7 +40,7 @@ Spring 由众多设计精良模块组成，这些模块能够帮助我们快速�
 
 ##### Spring 的核心价值有哪些？
 
-![核心价值](C:/Users/zhh/Desktop/Addicted-To-Learning/assets/spring-core-value.png)
+![核心价值](../assets/spring-core-value.png)
 
  
 

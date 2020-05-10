@@ -210,20 +210,128 @@ Spring 由众多设计精良模块组成，这些模块能够帮助我们快速�
     System.out.println("获取 Environment 类型的 Bean：" + environment);
 ```
 
-总结：**依赖查找只能找到 Bean 对象**，对于不存在的 Bean 会抛 NoSuchBeanDefinitionException 异常。**依赖注入可以注入 Bean 对象（自定义的 Bean 对象、容器内建的 Bean 对象）和容器提供的依赖。**
-
 
 
 ##### Spring IoC 依赖来源
 
-- 自定义 Bean 
-- 容器内建 Bean 对象
-- 容器内建对象
+- 依赖查找的来源
+
+1. Spring BeanDefinition（自定义的 Bean）
+
+   >  配置元数据
+   >
+   > <bean id="user" class = "...">
+   >
+   >  @Bean public User user(){}
+   >
+   > BeanDefinitionBuilder
+
+2.  单例对象
+
+   > API 配置
+   >
+   > 通过 SingletonBeanRegistry#registerSingleton(String beanName, Object singletonObject) 实现
+
+3.  Spring 内建 BeanDefinition
+
+   > Bean 实例，**在 AnnotationConfigUtils 类中可以找到这些类的 Bean 名称**
+   >
+   > ConfigurationClassPostProcessor 处理 Spring 配置类
+   >
+   > AutowiredAnnotationBeanPostProcessor 处理 @Autowired 以及 @Value 注解
+   >
+   > CommonAnnotationBeanPostProcesser （条件激活）处理 JSR-250 注解如@PostConstruct 等
+   >
+   > EventListenerMethodProcessr 处理标注 @EventListener 的 Spring 事件监听方法
+   >
+   > DefaultEventListenerFactory  @EventListener 事件监听方法适配为 ApplicationListener
+   >
+   > PersistenceAnnotationBeanPostProcessor （条件激活）处理 JPA 注解场景
+
+4. Spring 内建单例对象
+
+   | Bean 名称                   | Bean 实例                         | 使用场景                |
+   | --------------------------- | --------------------------------- | ----------------------- |
+   | environment                 | Environment 对象                  | 外部化配置以及 Profiles |
+   | systemProperties            | java.util.Properties 对象         | Java 系统属性           |
+   | systemEnvironment           | java.util.Map 对象                | 操作系统环境变量        |
+   | messageSource               | MessageSource 对象                | 国际化文案              |
+   | lifecycleProcessor          | LifecycleProcessor 对象           | Lifecycle Bean 处理器   |
+   | applicationEventMulticaster | ApplicationEventMulticaster 对 象 | Spring 事件广播器       |
+
+- 依赖注入的来源
+
+  在依赖查找来源的基础上增加了 
+
+  1. ResolvableDependency （非 Spring 容器管理的对象）、
+
+     > BeanFactory
+     >
+     > ResourceLoader
+     >
+     > ApplicationEventPublisher
+     >
+     > ApplicationContext
+     >
+     > 其中后面三个的类的实例指向同一个对象，就是 Spring 应用上下文实例
+     >
+     > 注册：ConfigurableListableBeanFactory#registerResolvableDependency
+
+  2. @Value 标注的外部化配置
+
+     > @Value("${usr.name}")
+     >  private String name;
+
+- Spring 容器管理和游离对象
+
+![依赖对象](../assets/依赖对象.png)
+
+- Spring BeanDefinition 作为依赖来源
+
+  - 元数据：BeanDefinition
+  - 注册：BeanDefinitionRegistry#registryBeanDefinition
+  - 类型：延迟和非延迟
+  - 顺序：Bean 生命周期顺序按照注册顺序
+
+- 单例对象作为依赖来源
+
+  来源：外部普通 Java 对象（不一定是 POJO）
+
+  注册：SingletonBeanRegistry#registrySingleton
+
+  限制：
+
+  > 无生命周期管理
+  >
+  > 无法实现延迟初始化 Bean
+
+- 非 Spring 容器管理对象作为依赖来源
+
+  注册：ConfigurableListableBeanFactory#registryResolvableDependency
+
+  限制：
+
+  > 无生命周期管理
+  >
+  > 无实现延迟初始化 Bean
+  >
+  > 无法通过依赖查找
+
+- 外部化配置作为依赖来源
+
+  类型：非常规 Spring 对象依赖来源
+  
+  限制：
+  
+  > 无生命周期管理
+  >
+  > 无实现延迟初始化 Bean
+  >
+  > 无法通过依赖查找
 
 
 
 ##### Spring IoC 配置元信息
-
 - Bean 定义配置（业务流程需要的 Bean 对象）
   - 基于 XML 文件
   - 基于 Properties 文件

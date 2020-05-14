@@ -42,7 +42,7 @@ Spring 由众多设计精良模块组成，这些模块能够帮助我们快速�
 
 #### Spring 的核心价值有哪些？
 
-![核心价值](../assets/spring-core-value.png)
+![核心价值](../assets/spring-framework/spring-core-value.png)
 
  
 
@@ -64,7 +64,7 @@ Spring 由众多设计精良模块组成，这些模块能够帮助我们快速�
 
   - 依赖注入 DI （Depend Injection），被动或自动依赖绑定的方式，无需依赖相关的额 API
 
-    ![对比](../assets/DIvsDL.jpg)
+    ![对比](../assets/spring-framework/DIvsDL.jpg)
 
 - 生命周期管理
 
@@ -352,7 +352,7 @@ Bean 延迟依赖查找接口
 
 - AbstractApplicationContext 内建可查找的依赖
 
-![AbstractApplicationContext内建可查找单例对象](../assets/AbstractApplicationContext内建可查找单例对象.png)
+![AbstractApplicationContext内建可查找单例对象](../assets/spring-framework/AbstractApplicationContext内建可查找单例对象.png)
 
 - 注解驱动 Spring 应用上下文内建可查找的依赖（内建 bean）（部分）
 
@@ -369,7 +369,7 @@ Bean 延迟依赖查找接口
 
 #### 依赖查找中的经典异常
 
-![依赖查找常见异常](../assets/依赖查找常见Exception.png)
+![依赖查找常见异常](../assets/spring-framework/依赖查找常见Exception.png)
 
 
 
@@ -474,7 +474,7 @@ Bean 延迟依赖查找接口
 
 4. Spring 内建单例对象
 
-   ![AbstractApplicationContext内建可查找单例对象](../assets/AbstractApplicationContext内建可查找单例对象.png)
+   ![AbstractApplicationContext内建可查找单例对象](../assets/spring-framework/AbstractApplicationContext内建可查找单例对象.png)
 
 #### 依赖注入的来源
 
@@ -501,7 +501,7 @@ Bean 延迟依赖查找接口
 
 #### Spring 容器管理和游离对象对比
 
-![依赖对象](../assets/依赖对象.png)
+![依赖对象](../assets/spring-framework/依赖对象.png)
 
 #### Spring BeanDefinition 作为依赖来源
 
@@ -599,7 +599,7 @@ BeanDefinition 是 Spring 框架中定义 Bean 的配置元信息接口，包含
 
 BeanDefinition 的元信息如图：
 
-![BeanDefinition](../assets/BeanDefinition.png)
+![BeanDefinition](../assets/spring-framework/BeanDefinition.png)
 
 **BeanDefinition 的构建**
 
@@ -914,7 +914,7 @@ Bean 垃圾回收
 
 #### Spring Bean 有哪些作用域
 
-![spring-bean作用域](../assets/spring-bean作用域.png)
+![spring-bean作用域](../assets/spring-framework/spring-bean作用域.png)
 
 #### singleton bean 作用域
 

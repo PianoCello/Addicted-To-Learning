@@ -990,35 +990,67 @@ Bean 垃圾回收
 
 #### Spring Bean 元信息配置阶段
 
+BeanDefinition 配置
 
+- 面向资源
+  - XML 配置
+  - Properties 资源配置
+- 面向注解
+- 面向 API
 
 #### Spring Bean 元信息解析阶段
 
-
+- 面向资源 BeanDefinition 解析
+  - BeanDefinitionReader
+  - XML 解析器 - BeanDefinitionParser
+- 面向注解 BeanDefinition 解析
+  - AnnotatedBeanDefinitionReader （没有继承 BeanDefinitionReader）
 
 #### Spring Bean 注册阶段
 
+- BeanDefinitionRegistry 接口的 registerBeanDefinition(beanName, beanDefinition) 方法
 
+  它的最重要的实现类是 DefaultListableBeanFactory，AnnotationConfigApplicationContext 最终也是引用它来实现。
 
 #### Spring BeanDefinition 合并阶段
 
+在 Spring 中每一个 Bean 基本上都会对应有一个 BeanDefinition，对于它们的实例化和初始化的过程 BeanDefinition 也起着关键性作用，BeanDefinition 存在父 bd（BeanDefinition），子 bd 可以继承它的父 bd 的属性，所以我们在实例化和初始化 Bean 的时候必须考虑父 bd。
 
+在 Bean 的初始化流程中很多地方都出现了与合并 bd 相关的操作，特别是合并 bd 更是多次调用，为什么要这么做呢？
+
+- 很多地方我们需要拿到完整的 bd，不能只是一个子 bd，只要会有缺失，很多判断会有问题，所以每次拿到 bd 都需要合并 bd。
+- 因为我们可以在很多地方将 bd 中的属性改变，所以我们不能只是在一个地方去合并 bd，所以在很多地方需要合并 bd。比如我们在 BeanDefinitionRegistryPostProcessor 或者 BeanFactoryPostProcessor 可以很简单的拿到 bd 甚至注册 bd，所以我们可通过这种方式更改 bd 中的属性或者添加父 bd，这个时候之前合并的 bd 就不准确了，所以需要多次合并 bd。
+
+**合并 BeanDefinition 的方法定义在 ConfigurableBeanFactory 接口中，AbstractBeanFactory 抽象类实现了这个接口的 getMergedBeanDefinition() 方法。**
+
+合并流程：
+
+1. 找到父 bd，如果没有找到就直接将自身当作父 bd，找到的话就看看父 bd 有没有父 bd，并且通过 getMergedBeanDefinition() 方法得到父 bd 合并之后的 bd。
+2. 合并 bd，通过父 bd 创建出一个 RootBeanDefinition 对象，然后子 bd 覆盖父 bd 创建出来的对象（覆盖属性之类的）。
+3. 将合并后的 bd 放入一个 mergedBeanDefinitions 集合中，最后将合并后的 bd 返回。
 
 #### Spring Bean Class 加载阶段
 
-
+- ClassLoader 类加载
+- Java Security 安全控制
+- ConfigurableBeanFactory 临时 ClassLoader
 
 #### Spring Bean 实例化前阶段
 
-
+- 非主流生命周期-Bean 实例化前阶段
+  - InstantiationAwareBeanPostProcessor#postProcessBeforeInstantiation
 
 #### Spring Bean 实例化阶段
 
-
+- 实例化方式
+  - 传统实例化方式 
+    - 实例化策略-InstantiationStrategy
+  - 构造器依赖注入
 
 #### Spring Bean 实例化后阶段
 
-
+- Bean 属性赋值（Populate）判断
+  - InstantiationAwareBeanPostProcessor#postProcessAfterInstantiation
 
 #### Spring Bean 属性赋值前阶段
 

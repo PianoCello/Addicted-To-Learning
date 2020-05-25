@@ -990,71 +990,163 @@ Bean 垃圾回收
 
 #### Spring Bean 元信息配置阶段
 
+BeanDefinition 配置
 
+- 面向资源
+  - XML 配置
+  - Properties 资源配置
+- 面向注解
+- 面向 API
 
 #### Spring Bean 元信息解析阶段
 
-
+- 面向资源 BeanDefinition 解析
+  - BeanDefinitionReader
+  - XML 解析器 - BeanDefinitionParser
+- 面向注解 BeanDefinition 解析
+  - AnnotatedBeanDefinitionReader （没有继承 BeanDefinitionReader）
 
 #### Spring Bean 注册阶段
 
+- BeanDefinitionRegistry 接口的 registerBeanDefinition(beanName, beanDefinition) 方法
 
+  它的最重要的实现类是 DefaultListableBeanFactory，AnnotationConfigApplicationContext 最终也是引用它来实现。
 
 #### Spring BeanDefinition 合并阶段
 
+在 Spring 中每一个 Bean 基本上都会对应有一个 BeanDefinition，对于它们的实例化和初始化的过程 BeanDefinition 也起着关键性作用，BeanDefinition 存在父 bd（BeanDefinition），子 bd 可以继承它的父 bd 的属性，所以我们在实例化和初始化 Bean 的时候必须考虑父 bd。
 
+在 Bean 的初始化流程中很多地方都出现了与合并 bd 相关的操作，特别是合并 bd 更是多次调用，为什么要这么做呢？
+
+- 很多地方我们需要拿到完整的 bd，不能只是一个子 bd，只要会有缺失，很多判断会有问题，所以每次拿到 bd 都需要合并 bd。
+- 因为我们可以在很多地方将 bd 中的属性改变，所以我们不能只是在一个地方去合并 bd，所以在很多地方需要合并 bd。比如我们在 BeanDefinitionRegistryPostProcessor 或者 BeanFactoryPostProcessor 可以很简单的拿到 bd 甚至注册 bd，所以我们可通过这种方式更改 bd 中的属性或者添加父 bd，这个时候之前合并的 bd 就不准确了，所以需要多次合并 bd。
+
+**合并 BeanDefinition 的方法定义在 ConfigurableBeanFactory 接口中，AbstractBeanFactory 抽象类实现了这个接口的 getMergedBeanDefinition() 方法。**
+
+合并流程：
+
+1. 找到父 bd，如果没有找到就直接将自身当作父 bd，找到的话就看看父 bd 有没有父 bd，并且通过 getMergedBeanDefinition() 方法得到父 bd 合并之后的 bd。
+2. 合并 bd，通过父 bd 创建出一个 RootBeanDefinition 对象，然后子 bd 覆盖父 bd 创建出来的对象（覆盖属性之类的）。
+3. 将合并后的 bd 放入一个 mergedBeanDefinitions 集合中，最后将合并后的 bd 返回。
+4. Spring 框架同时提供了一个机会给框架其他部分，或者开发人员用于在 bean 创建过程中，MergedBeanDefinition (mbd) 生成之后，bean 属性填充之前，对该 bean 和该MergedBeanDefinition 做一次回调，相应的回调接口是MergedBeanDefinitionPostProcessor。
 
 #### Spring Bean Class 加载阶段
 
-
+- ClassLoader 类加载
+- Java Security 安全控制
+- ConfigurableBeanFactory 临时 ClassLoader
 
 #### Spring Bean 实例化前阶段
 
+**InstantiationAwareBeanPostProcessor** 继承自 **BeanPostProcessor**，是 Spring 非常重要的拓展接口，代表着 bean 的一段生命周期：实例化（**Instantiation**）。 接口方法说明：
 
+1. **postProcessBeforeInstantiation** 调用时机为 bean 实例化（**Instantiation**）之前如果返回了bean 实例, 则会替代原来正常通过 target bean 生成的 bean 的流程。此时 bean 的执行流程将会缩短, 只会执行 BeanPostProcessor#postProcessAfterInitialization 接口完成初始化。
+2. **postProcessAfterInstantiation** 调用时机为 bean 实例化（**Instantiation**）之后和任何初始化（**Initialization**）之前。
+3. **postProcessProperties** 调用时机为 postProcessAfterInstantiation 执行之后并返回 true, 返回的 PropertyValues 将作用于给定 bean 属性赋值。
+4. **postProcessPropertyValues** 已经被标注@Deprecated，后续将会被 postProcessProperties 取代。
+
+**InstantiationAwareBeanPostProcessor** 与 **BeanPostProcessor** 对比：
+
+1. BeanPostProcessor 执行时机为 bean 初始化（**Initialization**）阶段，日常可以拓展该接口对 bean 初始化进行定制化处理。
+2. InstantiationAwareBeanPostProcessor 执行时机 bean 实例化（**Instantiation**）阶段，典型用于替换 bean 默认创建方式，例如 aop 通过拓展接口生成代理对应，主要用于基础框架层面。如果日常业务中需要拓展该，Spring 推荐使用缺省适配器类InstantiationAwareBeanPostProcessorAdapter。
+3. **所有 bean 创建都会进行回调。**
+
+**InstantiationAwareBeanPostProcessor 的触发点**
+
+1. 从 AbstractAutowireCapableBeanFactory#**createBean** 开始
+
+2. 跟进 AbstractAutowireCapableBeanFactory#**resolveBeforeInstantiation** 会触发 **postProcessorsBeforeInstantiation** 执行，返回 bean **非 null** 则直接执行**beanPostProcessorsAfterInitialization** 进行初始化后置处理，返回的 bean 直接返回容器，生命周期缩短。
+3. 跟进 AbstractAutowireCapableBeanFactory#**doCreateBean#populateBean** 先会触发 **postProcessAfterInstantiation** 执行，紧接着**执行 IoC 依赖注入**，然后优先触发 **postProcessProperties** 执行，如没覆盖则触发 postProcessPropertyValues。
+
+
+
+- Bean 实例化前阶段
+  - InstantiationAwareBeanPostProcessor#postProcessBeforeInstantiation
 
 #### Spring Bean 实例化阶段
 
-
+- 实例化方式
+  - 传统实例化方式 
+    - 实例化策略-InstantiationStrategy
+  - 构造器依赖注入
 
 #### Spring Bean 实例化后阶段
 
+- Bean 属性赋值（Populate）判断
 
+  - InstantiationAwareBeanPostProcessor#postProcessAfterInstantiation
+
+    这个方法的默认返回值为 true，如果返回 false，将防止对此 bean 实例调用任何后续 InstantiationAwareBeanPostProcessor 操作。
 
 #### Spring Bean 属性赋值前阶段
 
-
+- Bean 属性值元信息
+  - PropertyValues
+- Bean 属性赋值前回调
+  - Spring 1.2 -5.0：InstantiationAwareBeanPostProcessor#postProcessPropertyValues
+  - Spring 5.1：InstantiationAwareBeanPostProcessor#**postProcessProperties**
 
 #### Spring Bean Aware 接口回调阶段
 
+**Aware** 是已感知的，意识到的意思。所以这些接口应该是能感知到所有 **Aware** 前面的含义的。它的目的是为了让 bean 获取 Spring 容器的服务。
 
+- Spring Aware 接口（以下也是回调执行顺序）
+  - BeanFactory 生命周期
+    - BeanNameAware 
+    - BeanClassLoaderAware 
+    - BeanFactoryAware 
+  - ApplicationContext 生命周期
+    - EnvironmentAware 
+    - EmbeddedValueResolverAware 
+    - ResourceLoaderAware 
+    - ApplicationEventPublisherAware 
+    - MessageSourceAware 
+    - ApplicationContextAware
 
 #### Spring Bean 初始化前阶段
 
-
+- 已完成
+  - Bean 实例化
+  - Bean 属性赋值
+  - Bean Aware 接口回调
+- 方法回调
+  - BeanPostProcessor#postProcessBeforeInitialization
 
 #### Spring Bean 初始化阶段
 
-
+- Bean 初始化（Initialization）
+  - @PostConstruct 标注方法（依赖于注解驱动，在 BeanFactory 中可以使用 CommonAnnotationBeanPostProcessor 触发）
+  - 实现 InitializingBean 接口的 afterPropertiesSet() 方法
+  - 自定义初始化方法
 
 #### Spring Bean 初始化后阶段
 
-
+- 方法回调
+  - BeanPostProcessor#postProcessAfterInitialization
 
 #### Spring Bean 初始化完成阶段
 
-
+- 方法回调
+  - Spring 4.1 +：SmartInitializingSingleton#afterSingletonsInstantiated
 
 #### Spring Bean 销毁前阶段
 
-
+- 方法回调
+  - DestructionAwareBeanPostProcessor#postProcessBeforeDestruction
 
 #### Spring Bean 销毁阶段
 
-
+- Bean 销毁（Destroy）
+  - @PreDestroy 标注方法
+  - 实现 DisposableBean 接口的 destroy() 方法
+  - 自定义销毁方法
 
 #### Spring Bean 垃圾收集	
 
-
+- Bean 垃圾回收（GC）
+  - 关闭 Spring 容器（应用上下文）
+  - 执行 GC 
+  - Spring Bean 覆盖的 finalize() 方法被回调
 
 
 

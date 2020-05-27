@@ -909,3 +909,335 @@ class Line extends Shape {
 }
 ```
 
+
+
+## 接口 ##
+
+接口和抽象类提供了一种将接口与实现分离的更加结构化的方法。
+
+### 抽象类和抽象方法 ###
+
+**抽象方法**只有方法签名，没有实现体。包含抽象方法的类叫做**抽象类**。如果一个类包含一个或多个抽象方法，那么类本身也必须限定为抽象的。
+
+```Java
+abstract void f(); //只有方法签名
+
+//抽象类
+abstract class Basic {
+    abstract void unimplemented();
+}
+```
+
+抽象类不允许创建对象，当试图创建抽象类的对象时，会得到编译器的错误信息。如果创建一个抽象类的子类并为之创建对象，那么就必须为抽象类的所有抽象方法提供方法定义。如果不这么做，新类仍然是一个抽象类，编译器会强制我们为新类加上 **abstract** 关键字。
+
+抽象类的抽象方法可以是**包访问权限、protected 权限、public 权限**。
+
+### 创建接口 ###
+
+接口是一种规范，是一系列方法的声明，是一些方法特征的集合，一个接口只有方法的特征没有方法的实现，因此这些方法可以在不同的地方被不同的类实现，而这些实现可以具有不同的行为。
+
+使用 **interface** 关键字创建接口。**接口的抽象方法默认都被 public abstract 修饰。** 接口可以有 **public 权限**和**包访问权限**。
+
+```java
+public interface PureInterface {
+    int m1(); 
+    void m2();
+    double m3();
+}
+```
+
+ **Java 8 允许接口包含默认方法和静态方法。**接口与抽象类最明显的区别可能就是使用上的惯用方式。接口的典型使用是代表一个类的类型或一个形容词，如 Runnable 或 Serializable，而抽象类通常是类层次结构的一部分或一件事物的类型，如 String 或 ActionHero。
+
+接口可以包含属性，这些属性被隐式指明为 **public static final**。
+
+#### 默认方法 ####
+
+Java 8 为关键字 **default** 增加了一个新的用途（之前只用于 **switch** 语句和注解中）。增加默认方法的极具说服力的理由是它允许在不破坏已使用接口的代码的情况下，在接口中增加新的方法。默认方法有时也被称为*守卫方法*或*虚拟扩展方法*。
+
+```java
+interface InterfaceWithDefault {
+    void firstMethod();
+    void secondMethod();
+
+    default void newMethod() {
+        System.out.println("newMethod");
+    }
+}
+```
+
+#### 多继承 ####
+
+**Java 只能继承自一个类，但可以实现任意多个接口**。
+
+Java 8 之后通过**默认方法**具有了某种多继承的特性。结合带有默认方法的接口意味着结合了多个基类中的行为。因为接口中仍然不允许存在成员属性（只有静态属性，不适用），所以属性仍然只会来自单个基类或抽象类，也就是说，不会存在状态的多继承。
+
+如果实现的多个接口之间有相同的方法签名，这会使编译器报错。
+
+#### 静态方法 ####
+
+Java 8 允许在接口中添加**静态方法**。这么做能恰当地把工具功能置于接口中，从而操作接口，或者成为通用的工具。
+
+```java
+public interface Operations {
+    void execute();
+    //接口的静态方法
+    static void runOps(Operations... ops) {
+        for (Operations op: ops) {
+            op.execute();
+        }
+    }
+    static void show(String msg) {
+        System.out.println(msg);
+    }
+}
+```
+
+这是模版方法模式的一个版本，`runOps()` 是一个模版方法。`runOps()` 使用可变参数列表，因而可以传入任意多的 **Operations** 参数并按顺序运行它们：
+
+```java
+class Bing implements Operations {
+    @Override
+    public void execute() {
+        Operations.show("Bing");
+    }
+}
+
+class Crack implements Operations {
+    @Override
+    public void execute() {
+        Operations.show("Crack");
+    }
+}
+
+class Twist implements Operations {
+    @Override
+    public void execute() {
+        Operations.show("Twist");
+    }
+}
+
+public class Machine {
+    public static void main(String[] args) {
+        Operations.runOps(
+            new Bing(), new Crack(), new Twist());
+        //依次输出 Bing Crack Twist
+    }
+}
+```
+
+这个特性是一项改善，因为它允许把静态方法放在更合适的地方。
+
+### 抽象类和接口 ###
+
+在 Java 8 引入 **default** 方法之后，选择用抽象类还是用接口变得令人困惑。下表做了明确的区分：
+
+| 特性                | 接口                                                       | 抽象类                                   |
+| ------------------- | ---------------------------------------------------------- | ---------------------------------------- |
+| 组合                | 新类可以实现多个接口                                       | 只能继承单一抽象类                       |
+| 状态                | 不能包含属性（除了静态属性，不支持对象状态）               | 可以包含属性，非抽象方法可能引用这些属性 |
+| 默认方法和 抽象方法 | 不需要在子类中实现默认方法。默认方法可以引用其他接口的方法 | 必须在非抽象子类中实现抽象方法           |
+| 构造器              | 没有构造器                                                 | 可以有构造器                             |
+| 可见性              | 隐式 **public**                                            | **public、protected、包访问**            |
+
+**抽象类的构造方法不能直接被调用因为抽象类不能实现实例。**但是一旦一个普通类继承了抽象类便也可以在构造函数中调用其抽象类的构造函数。
+
+抽象类仍然是一个类，在创建新类时只能继承它一个。而创建类的过程中可以实现多个接口。
+
+尽可能地抽象，更倾向使用接口而不是抽象类。只有当必要时才使用抽象类。
+
+### 使用继承扩展接口 ###
+
+通过继承，可以很容易在接口中增加方法声明，还可以在新接口中结合多个接口。这两种情况都可以得到新接口。
+
+```java
+interface Monster {
+    void menace();
+}
+//继承一个接口
+interface DangerousMonster extends Monster {
+    void destroy();
+}
+
+interface Lethal {
+    void kill();
+}
+//继承两个接口
+interface Vampire extends DangerousMonster, Lethal {
+    void drinkBlood();
+}
+//实现接口
+class VeryBadVampire implements Vampire {
+    @Override
+    public void menace() {}
+
+    @Override
+    public void destroy() {}
+
+    @Override
+    public void kill() {}
+
+    @Override
+    public void drinkBlood() {}
+}
+```
+
+### 接口适配 ###
+
+接口最吸引人的原因之一是相同的接口可以有多个实现。体现在一个方法接受**接口作为参数**，该接口的实现和传递对象给方法则交由你来做。
+
+因此，接口的一种常见用法是**策略模式**。编写一个方法执行某些操作并接受一个指定的接口作为参数。可以说：“只要对象遵循接口，就可以调用方法” ，这使得方法更加灵活，通用，并更具可复用性。
+
+例如，类 **Scanner** 的构造器接受的是一个 **Readable** 接口， **Scanner** 没有将其参数限制为某个特定类。如果你创建了一个新类并想让 **Scanner** 作用于它，就让它实现 **Readable** 接口。假设你有一个类没有实现 **Readable** 接口，可以使用适配器模式进行适配。通过这种方式，**Scanner** 可以与更多的类型协作。**一个接受接口类型的方法提供了一种让任何类都可以与该方法进行适配的方式**，这就是使用接口而不是类的强大之处。
+
+### 接口嵌套 ###
+
+接口内部也可以定义接口，内部接口自动就是 **public** 的，不能指明为 **private**。
+
+在类中也能定义内部接口，而它的权限可以是任意的。
+
+```Java
+public interface InterfaceInnerInterface {
+    //public 不是必须的 因为默认是 public
+    public interface SS {
+        
+    }
+}
+
+public class ClassInnerInterface {
+    public interface AA {
+    }
+
+    protected interface BB {
+    }
+
+    private interface CC {
+    }
+
+    interface DD {
+    }
+}
+```
+
+### 接口和工厂方法模式 ###
+
+接口是多实现的途径，而生成符合某个接口的对象的典型方式是**工厂方法模式**。例子：
+
+```java
+//抽象产品角色
+interface Service {
+    void method1();
+}
+//抽象工厂角色
+interface ServiceFactory {
+    Service getService();
+}
+//具体产品角色
+class Service1 implements Service {
+    Service1() {} // Package access
+
+    @Override
+    public void method1() {
+        System.out.println("Service1 method1");
+    }
+}
+class Service2 implements Service {
+    Service2() {} // Package access
+
+    @Override
+    public void method1() {
+        System.out.println("Service2 method1");
+    }
+}
+
+//具体工厂角色
+class Service1Factory implements ServiceFactory {
+    @Override
+    public Service getService() {
+        return new Service1();
+    }
+}
+class Service2Factory implements ServiceFactory {
+    @Override
+    public Service getService() {
+        return new Service2();
+    }
+}
+
+public class Factories {
+    public static void serviceConsumer(ServiceFactory fact) {
+        Service s = fact.getService();
+        s.method1();
+    }
+
+    public static void main(String[] args) {
+        serviceConsumer(new Service1Factory());
+        serviceConsumer(new Service2Factory());
+        //输出 
+        //Service1 method1
+		//Service2 method1
+    }
+}
+```
+
+接口使用小结：
+
+认为接口是好的选择，从而使用接口不用具体类，这具有诱惑性。很多人都掉进了这个陷阱，只要有可能就创建接口和工厂。这种逻辑看起来像是可能会使用不同的实现，所以总是添加这种抽象性。这变成了一种过早的设计优化。
+
+**任何抽象性都应该是由真正的需求驱动的。**当有必要时才应该使用接口进行重构，而不是到处添加额外的间接层，从而带来额外的复杂性。
+
+**恰当的原则是优先使用类而不是接口。**从类开始，如果使用接口的必要性变得很明确，那么就重构。接口是一个伟大的工具，但它们容易被滥用。
+
+
+
+## 内部类 ##
+
+
+
+### 创建内部类 ###
+
+
+
+### 链接外部类 ###
+
+
+
+### 使用 .this 和 .new ###
+
+
+
+### 内部类向上转型 ###
+
+
+
+### 内部类方法和作用域 ###
+
+
+
+### 匿名内部类 ###
+
+
+
+### 嵌套类 ###
+
+
+
+### 为什么需要内部类 ###
+
+
+
+### 继承内部类 ###
+
+
+
+### 内部类可以被覆盖吗 ###
+
+
+
+### 局部内部类 ###
+
+
+
+### 内部类标识符 ###
+
+
+

@@ -1191,37 +1191,257 @@ public class Factories {
 
 ## 内部类 ##
 
-
+一个定义在另一个类中的类，叫作内部类，它允许你把一些逻辑相关的类组织在一起，并控制位于内部的类的可见性。**内部类与组合是完全不同的概念**。在最初，内部类看起来就像是一种代码隐藏机制：将类置于其他类的内部。但是，内部类远不止如此，它了解外围类，并能与之通信，而且你用内部类写出的代码更加优雅而清晰。
 
 ### 创建内部类 ###
 
+把类的定义置于外围类的里面：
 
+```java
+public class OuterClass {
+    class InnerClass {
+        private int i = 11;
+
+        public int value() { return i; }
+    }
+}
+```
 
 ### 链接外部类 ###
 
+内部类不只是一种名字隐藏和组织代码的模式。当生成一个内部类的对象时，此对象与制造它的外围对象（enclosing object）之间就有了一种联系，所以**它能访问其外围对象的方法和字段**。
 
+```Java
+interface Selector {
+    boolean end();
+    Object current();
+    void next();
+}
+
+public class Sequence {
+    private Object[] items;
+    private int next = 0;
+
+    public Sequence(int size) {
+        items = new Object[size];
+    }
+
+    public void add(Object x) {
+        if (next < items.length) {
+            items[next++] = x;
+        }
+    }
+
+    private class SequenceSelector implements Selector {
+        private int i = 0;
+
+        @Override
+        public boolean end() {
+            return i == items.length;
+        }
+
+        @Override
+        public Object current() {
+            return items[i];
+        }
+
+        @Override
+        public void next() {
+            if (i < items.length) {
+                i++;
+            }
+        }
+    }
+
+    public Selector selector() {
+        return new SequenceSelector();
+    }
+}
+
+class Test {
+    public static void main(String[] args) {
+        //初始化 Sequence
+        Sequence sequence = new Sequence(10);
+        for (int i = 0; i < 10; i++) {
+            sequence.add(Integer.toString(i));
+        }
+        // 迭代器模式
+        Selector selector = sequence.selector();
+        while (!selector.end()) {
+            System.out.print(selector.current() + " ");
+            selector.next();
+        }
+    }
+}
+```
 
 ### 使用 .this 和 .new ###
 
+如果你需要生成对外部类对象的引用，可以使用外部类的名字后面紧跟 **.this** 。
 
+```java 
+public class DotThis {
+    void f() {
+        System.out.println("DotThis.f()");
+    }
 
-### 内部类向上转型 ###
+    public Inner inner() {
+        return new Inner();
+    }
 
+    class Inner {
+        //内部类的方法
+        private DotThis outer() {
+            return DotThis.this;
+        }
+    }
 
+    public static void main(String[] args) {
+        DotThis dt = new DotThis();
+        DotThis.Inner dti = dt.inner();
+        DotThis outer = dti.outer();
 
-### 内部类方法和作用域 ###
+        outer.f();
+    }
+}
+```
 
+有时你可能想要告知某些对象，去创建其某个内部类的对象。要实现此目的，你必须在 **new** 表达式中提供对其他外部类对象的引用，这是需要使用 **.new** 语法。**在拥有外部类对象之前是不可能创建内部类对象的。**这是因为内部类对象会暗暗地连接到建它的外部类对象上。但是，如果你创建的是**静态内部类**，那么它就不需要对外部类对象的引用。
 
+```java
+public class DotNew {
+    //内部类
+    public class Inner {
+    }
+    public static void main(String[] args) {
+        DotNew dn = new DotNew();
+        DotNew.Inner dni = dn.new Inner();
+    }
+}
+```
+
+### 内部类与向上转型 ###
+
+当将内部类向上转型为其基类，尤其是转型为一个接口的时候，内部类就有了用武之地。
+
+因为此内部类-某个接口的实现-能够完全不可见，所得到的只是指向基类或接口的引用，所以能够很方便地隐藏实现细节。引用不能向下转型成 **private** 内部类（或 **protected** 内部类，除非是继承自它的子类），因为不能访问其名字。**private** 内部类给类的设计者提供了一种可以完全阻止任何依赖于类型的编码，并且完全隐藏了实现的细节。
 
 ### 匿名内部类 ###
 
+```java
+public class Parcel7 {
+    public Contents contents() {
+        return new Contents() { //匿名内部类
+            private int i = 11;
 
+            @Override
+            public int value() { return i; }
+        }; // Semicolon required
+    }
 
-### 嵌套类 ###
+    public static void main(String[] args) {
+        Parcel7 p = new Parcel7();
+        Contents c = p.contents();
+    }
+}
+```
 
+`contents()` 方法将返回值的生成与表示这个返回值的类的定义结合在一起！这个类没有名字，这种奇怪的语法指的是：创建一个继承自 **Contents** 的匿名类的对象。通过 **new** 表达式返回的引用被自动向上转型为对 **Contents** 的引用。
 
+在匿名类中定义字段时，还能够对其执行初始化操作：
+
+```java
+public class Parcel9 {
+    public Destination destination(final String dest) {
+        return new Destination() {
+            private String label = dest;
+            @Override
+            public String readLabel() { return label; }
+        };
+    }
+    public static void main(String[] args) {
+        Parcel9 p = new Parcel9();
+        Destination d = p.destination("Tasmania");
+    }
+}
+```
+
+如果定义一个匿名内部类，并且希望它使用一个在其外部定义的对象，那么编译器会要求其参数引用是 **final** 的。如果只是简单地给一个字段赋值，那么此例中的方法是很好的。但是，如何做一些类似构造器的行为？在匿名类中不能有命名构造器，可以通过**初始化代码块**。
+
+匿名内部类与常规的继承相比有些受限，即使匿名内部类既可以扩展类，也可以实现接口，但是不能两者兼备，而且如果是实现接口，也只能实现一个接口。
+
+### 静态内部类（嵌套类） ###
+
+普通的内部类对象隐式地保存了一个引用，指向创建它的外围类对象。当内部类是 **static** 的时：
+
+- 要创建静态内部类的对象，并不需要其外围类的对象。
+- 不能从静态内部类的对象中访问非静态的外围类对象。
+- 普通的内部类不能有 **static** 方法和 **static** 字段等，静态内部类可以。
+
+```java
+public class Parcel11 {
+    private static class ParcelContents implements Contents {
+        private int i = 11;
+        @Override
+        public int value() { return i; }
+    }
+    public static Contents contents() {
+        return new ParcelContents();
+    }
+    public static void main(String[] args) {
+        Contents c = contents();
+    }
+}
+```
+
+### 接口内部的类 ###
+
+静态内部类可以作为接口的一部分，接口中的任何类都自动地是 **public** 和 **static** 的。你甚至可以在内部类中实现其外围接口，就像下面这样：
+
+```java
+public interface ClassInInterface {
+    void howdy();
+    //编译器会自动添加 public 和 static
+    class Test implements ClassInInterface {
+        @Override
+        public void howdy() {
+            System.out.println("Howdy!");
+        }
+    }
+}
+
+class A {
+    public static void main(String[] args) {
+        ClassInInterface test = new ClassInInterface.Test();
+        test.howdy();
+    }
+}
+```
 
 ### 为什么需要内部类 ###
+
+一般说来，内部类继承自某个类或实现某个接口，内部类的代码操作创建它的外围类的对象。所以可以认为内部类提供了某种进入其外围类的窗口。
+
+内部类必须要回答的一个问题是：如果只是需要一个对接口的引用，为什么不通过外围类实现那个接口呢？答案是：“如果这能满足需求，那么就应该这样做。”那么内部类实现一个接口与外围类实现这个接口有什么区别呢？答案是：后者不是总能享用到接口带来的方便，有时需要用到接口的实现。所以，使用内部类最吸引人的原因是：
+
+> 每个内部类都能独立地继承自一个（接口的）实现，所以无论外围类是否已经继承了某个（接口的）实现，对于内部类都没有影响。
+
+如果没有内部类提供的、可以继承多个具体的或抽象的类的能力，一些设计与编程问题就很难解决。从这个角度看，**内部类使得多重继承的解决方案变得完整**。接口解决了部分问题，而内部类有效地实现了“多重继承”。也就是说，内部类允许继承多个非接口类型。
+
+使用内部类，还可以获得其他一些特性：
+
+- 内部类可以有多个实例，每个实例都有自己的状态信息，并且与其外围类对象的信息相互独立。
+- 在单个外围类中，可以让多个内部类以不同的方式实现同一个接口，或继承同一个类。
+- 创建内部类对象的时刻并不依赖于外围类对象的创建。
+- 内部类并没有令人迷惑的"is-a”关系，它就是一个独立的实体。
+
+举个例子，如果 **Sequence.java** 不使用内部类，就必须声明"**Sequence** 是一个 **Selector**"，对于某个特定的 **Sequence** 只能有一个 **Selector**，然而使用内部类很容易就能拥有另一个方法 `reverseSelector()`，用它来生成一个反方向遍历序列的 **Selector**，只有内部类才有这种灵活性。
+
+#### 闭包与回调 ####
+
+
+
+#### 内部类与控制框架 ####
 
 
 

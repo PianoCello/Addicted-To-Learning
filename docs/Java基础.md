@@ -1582,6 +1582,8 @@ public class InheritInner extends WithInner.Inner {
 
 可以在代码块里创建内部类，典型的方式是在一个方法体的里面创建。局部内部类不能有访问说明符，因为它不是外围类的一部分；但是它可以访问当前代码块内的常量，以及此外围类的所有成员。
 
+### 内部类标识符 ###
+
 
 由于编译后每个类都会产生一个**.class** 文件，其中包含了如何创建该类型的对象的全部信息（此信息产生一个"meta-class"，叫做 **Class** 对象）。内部类也必须生成一个**.class** 文件以包含它们的 **Class** 对象信息。这些类文件的命名有严格的规则：外围类的名字，加上“**$**"，再加上内部类的名字。例如，**LocalInnerClass.java** 生成的 **.class** 文件包括：
 
@@ -1625,33 +1627,213 @@ Java集合类库采用“持有对象”（holding objects）的思想，并将�
 
 在 **java.util** 包中的 **Arrays** 和 **Collections** 类中都有很多实用的方法，可以在一个 **Collection** 中添加一组元素。
 
-`Arrays.asList()` 方法接受一个数组或是逗号分隔的元素列表（使用可变参数），并将其转换为 **List** 对象。
+`Arrays.asList(T... a)` 方法接受一个数组或是逗号分隔的元素列表（使用可变参数），并将其转换为 **List** 对象（**这个实现是一个叫 Arrays.ArrayList 的内部类，底层实现是一个没法调整大小的数组，不能 add() 或 remove() 操作，可以修改**）。
+
+`Collections.addAll(Collection<? super T> c, T... elements)` 方法接受一个 **Collection** 对象，以及一个数组或是一个逗号分隔的列表，将其中元素添加到 **Collection** 中。
+
+> If you're adding elements from an **array**, you can `use Collections.addAll(col, arr)`
+>  Remember that varargs are also done using arrays
+>
+> If you're adding elements from a **Collection**, use `col.addAll(otherCol)`
+>  Do *NOT* e.g. `Collections.addAll(col, otherCol.toArray())`
+
+
 
 ### 集合的打印 ###
 
+必须使用 `Arrays.toString()` 来生成数组的可打印形式。
 
+```java
+public class PrintingCollections {
+  static Collection fill(Collection<String> collection) {
+    collection.add("rat");
+    collection.add("cat");
+    collection.add("dog");
+    collection.add("dog");
+    return collection;
+  }
+  static Map fill(Map<String, String> map) {
+    map.put("rat", "Fuzzy");
+    map.put("cat", "Rags");
+    map.put("dog", "Bosco");
+    map.put("dog", "Spot");
+    return map;
+  }
+  public static void main(String[] args) {
+    Integer[] integers = new Integer[]{1,2,3,4,5,6};
+    System.out.println(Arrays.toString(integers));
+      
+    System.out.println(fill(new ArrayList<>()));
+      
+    System.out.println(fill(new HashSet<>()));
+      
+    System.out.println(fill(new HashMap<>()));
+  }
+}
+/* Output:
+[1,2,3,4,5,6]
+[rat, cat, dog, dog]
+[rat, cat, dog]
+{rat=Fuzzy, cat=Rags, dog=Spot}
+*/
+```
+
+这显示了 Java 集合库中的两个主要类型。它们的区别在于集合中的每个“槽”（slot）保存的元素个数。 **Collection** 类型在每个槽中只能保存一个元素。此类集合包括： **List** ，它以特定的顺序保存一组元素； **Set** ，其中元素不允许重复； **Queue** ，只能在集合一端插入对象，并从另一端移除对象。 **Map** 在每个槽中存放了两个元素，**键和值**。
+
+默认的打印行为，使用集合提供的 `toString()` 方法即可生成可读性很好的结果。 **Collection** 打印出的内容用方括号括住，每个元素由逗号分隔。 **Map** 则由大括号括住，每个键和值用等号连接（键在左侧，值在右侧）。
+
+**ArrayList** 和 **LinkedList** 都是 **List** 的类型，它们都按插入顺序保存元素。两者之间的区别不仅在于执行某些类型的操作时的性能，而且 **LinkedList** 包含的操作多于 **ArrayList** 。
+
+**HashSet** ， **TreeSet** 和 **LinkedHashSet** 是 **Set** 的类型。 **Set** 仅保存每个相同项中的一个，并且不同的 **Set** 实现存储元素的方式也不同。 **HashSet** 使用相当复杂的方法存储元素，这种技术是检索元素的最快方法（通常只关心某事物是否是 **Set** 的成员，而存储顺序并不重要）。如果存储顺序很重要，则可以使用 **TreeSet** ，它将按比较结果的升序保存对象。或 **LinkedHashSet** ，它按照被添加的先后顺序保存对象。
+
+**Map** 使用键来查找对象，所关联的对象称为值，对于每个键， **Map** 只存储一次。这里没有指定（或考虑） **Map** 的大小，因为它会自动调整大小。 **Map** 的三种基本风格： **HashMap** ， **TreeMap** 和 **LinkedHashMap** 。键和值保存在 **HashMap** 中的顺序不是插入顺序，因为 **HashMap** 实现使用了非常快速的算法来控制顺序。 **TreeMap** 通过比较结果的升序来保存键， **LinkedHashMap** 在保持 **HashMap** 查找速度的同时按键的插入顺序保存键。
 
 ### 列表 List ###
 
+有两种类型的 **List** ：
 
+- 基本的 **ArrayList** ，擅长随机访问元素，但在 **List** 中间插入和删除元素时速度较慢。
+- **LinkedList** ，它通过代价较低的在 **List** 中间进行的插入和删除操作，提供了优化的顺序访问。 **LinkedList** 对于随机访问来说相对较慢，但它具有比 **ArrayList** 更大的特征集。
 
 ### 迭代器 Iterators ###
 
+迭代器是一个对象，它在一个序列中移动并选择该序列中的每个对象，而客户端程序员不知道或不关心该序列的底层结构。另外，迭代器通常被称为*轻量级对象*（lightweight object）：创建它的代价小。因此，经常可以看到一些对迭代器有些奇怪的约束。例如，Java 的 **Iterator** 只能单向移动。这个 **Iterator** 只能用来：
 
+1. 使用 `iterator()` 方法要求集合返回一个 **Iterator**。 **Iterator** 将准备好返回序列中的第一个元素。
+2. 使用 `next()` 方法获得序列中的下一个元素。
+3. 使用 `hasNext()` 方法检查序列中是否还有元素。
+4. 使用 `remove()` 方法将迭代器最近返回的那个元素删除。
+
+有了 **Iterator** ，就不必再为集合中元素的数量操心了。这是由 `hasNext()` 和 `next()` 关心的事情。如只想向前遍历 **List** ，并不打算修改 **List** 对象本身，使用 **for-each 循环**语法更加简洁。
+
+现在考虑创建一个 `display()` 方法，它不必知晓集合的确切类型。我们可以使用 **Iterable** 接口，该接口描述了“可以产生 **Iterator** 的任何东西”：
+
+```java
+public class CrossCollectionIteration2 {
+  public static void display(Iterable<Pet> ip) {
+    Iterator<Pet> it = ip.iterator();
+    while(it.hasNext()) {
+      Pet p = it.next();
+      System.out.print(p.id() + ":" + p + " ");
+    }
+    System.out.println();
+  }
+  public static void main(String[] args) {
+    List<Pet> pets = Pets.list(7);
+    LinkedList<Pet> petsLL = new LinkedList<>(pets);
+    HashSet<Pet> petsHS = new HashSet<>(pets);
+    TreeSet<Pet> petsTS = new TreeSet<>(pets);
+    display(pets);
+    display(petsLL);
+    display(petsHS);
+    display(petsTS);
+  }
+}
+/* Output:
+0:Rat 1:Manx 2:Cymric 3:Mutt 4:Pug 5:Cymric 6:Pug
+0:Rat 1:Manx 2:Cymric 3:Mutt 4:Pug 5:Cymric 6:Pug
+0:Rat 1:Manx 2:Cymric 3:Mutt 4:Pug 5:Cymric 6:Pug
+5:Cymric 2:Cymric 1:Manx 3:Mutt 6:Pug 4:Pug 0:Rat
+*/
+```
+
+`display()` 方法不包含任何有关它所遍历的序列的类型信息。这也展示了 **Iterator** 的真正威力：**能够将遍历序列的操作与该序列的底层结构分离**。出于这个原因，我们有时会说：迭代器统一了对集合的访问方式。
 
 #### ListLterator ####
 
+**ListIterator** 是一个更强大的 **Iterator** 子类型，它只能由各种 **List** 类生成。 **Iterator** 只能向前移动，而 **ListIterator** 可以双向移动。它可以生成迭代器在列表中指向位置的后一个和前一个元素的索引，并且可以使用 `set()` 方法替换它访问过的最近一个元素。可以通过调用 `listIterator()` 方法来生成指向 **List** 开头处的 **ListIterator** ，还可以通过调用 `listIterator(n)` 创建一个一开始就指向列表索引号为 **n** 的元素处的 **ListIterator** 。
 
+```java
+List<String> list = new ArrayList<>();
+    list.add("A");
+    list.add("B");
+    list.add("C");
+
+ListIterator<String> iterator = list.listIterator();
+while (iterator.hasNext()) {
+    System.out.println(iterator.nextIndex()+" "+iterator.next());
+}
+
+while (iterator.hasPrevious()) {
+    System.out.println(iterator.previousIndex()+" "+iterator.previous());
+}
+```
 
 ### 链表 LinkedList ###
 
+**LinkedList** 也像 **ArrayList** 一样实现了基本的 **List** 接口，但它在 **List** 中间执行插入和删除操作时比 **ArrayList** 更高效。然而,它在随机访问操作效率方面却要逊色一些。
 
+**LinkedList 还添加了一些方法，使其可以被用作栈、队列或双端队列（deque）** 。在这些方法中，有些彼此之间可能只是名称有些差异，或者只存在些许差异，以使得这些名字在特定用法的上下文环境中更加适用（特别是在 **Queue** 中）。例如：
+
+- `getFirst()` 和 `element()` 是相同的，它们都返回列表的头部（第一个元素）而并不删除它，如果 **List** 为空，则抛出 **NoSuchElementException** 异常。 `peek()` 方法与这两个方法只是稍有差异，它在列表为空时返回 **null** 。
+- `removeFirst()` 和 `remove()` 也是相同的，它们删除并返回列表的头部元素，并在列表为空时抛出 **NoSuchElementException** 异常。 `poll()` 稍有差异，它在列表为空时返回 **null** 。
+- `addFirst()` 在列表的开头插入一个元素。
+- `offer()` 与 `add()` 和 `addLast()` 相同。 它们都在列表的尾部（末尾）添加一个元素。
+- `removeLast()` 删除并返回列表的最后一个元素。
 
 ### 堆栈 Stack ###
 
+堆栈是“后进先出”（LIFO）集合。它有时被称为*叠加栈*（pushdown stack），因为最后“压入”（push）栈的元素，第一个被“弹出”（pop）栈。
 
+Java 1.0 中附带了一个 **Stack** 类，结果设计得很糟糕。
+
+Java 6 添加了 **ArrayDeque** ，其中包含直接实现堆栈功能的方法。即使它是作为一个堆栈在使用，我们仍然必须将其声明为 **Deque** 。有时一个名为 **Stack** 的类更能把事情讲清楚：
+
+```java
+public class Stack<T> {
+    private Deque<T> storage = new ArrayDeque<>();
+	//压栈
+    public void push(T v) {
+        storage.push(v);
+    }
+	//获取栈顶元素
+    public T peek() {
+        return storage.peek();
+    }
+	//出栈
+    public T pop() {
+        return storage.pop();
+    }
+
+    public boolean isEmpty() {
+        return storage.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+        return storage.toString();
+    }
+}
+```
+
+类名称后面的 **<>** 告诉编译器这是一个参数化类型，而其中的类型参数 **T** 会在使用类时被实际类型替换。基本上，这个类是在声明“我们在定义一个可以持有 **T** 类型对象的 **Stack** 。” **Stack** 是使用 **ArrayDeque** 实现的，而 **ArrayDeque** 也被告知它将持有 **T** 类型对象。注意， `push()` 接受类型为 **T** 的对象，而 `peek()` 和 `pop()` 返回类型为 **T** 的对象。 `peek()` 方法将返回栈顶元素，但并不将其从栈顶删除，而 `pop()` 删除并返回顶部元素。
+
+如果只需要栈的行为，那么使用继承是不合适的，因为这将产生一个具有 **ArrayDeque** 的其它所有方法的类中将会看到。 **Java 1.0** 设计者在创建 **java.util.Stack** 时，就犯了这个错误）。使用组合，可以选择要公开的方法以及如何命名它们。
 
 ### 集合 Set ###
+
+**Set** 不保存重复的元素。 如果试图将相同对象的多个实例添加到 **Set** 中，那么它会阻止这种重复行为。 **Set** 最常见的用途是测试归属性，可以很轻松地询问某个对象是否在一个 **Set** 中。因此，查找通常是 **Set** 最重要的操作，因此通常会选择 **HashSet** 实现，该实现针对快速查找进行了优化。
+
+**Set** 具有与 **Collection** 相同的接口，因此没有任何额外的功能，不像前面两种不同类型的 **List** 那样。实际上， **Set** 就是一个 **Collection** ，只是行为不同。（这是继承和多态思想的典型应用：表现不同的行为。）
+
+```java
+public class SetOfInteger {
+  public static void main(String[] args) {
+    Random rand = new Random(47);
+    Set<Integer> intset = new HashSet<>();
+    for(int i = 0; i < 1000; i++)
+      intset.add(rand.nextInt(30));
+    System.out.println(intset);
+  }
+}
+/* Output:
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 29]
+*/
+```
+
+早期 Java 版本中的 **HashSet** 产生的输出没有可辨别的顺序。这是因为出于对速度的追求， **HashSet** 使用了散列。由 **HashSet** 维护的顺序与 **TreeSet** 或 **LinkedHashSet** 不同，因为它们的实现具有不同的元素存储方式。 **TreeSet** 将元素存储在**红-黑树**数据结构中，而 **HashSet** 使用散列函数。 **LinkedHashSet** 因为查询速度的原因也使用了散列，但是看起来使用了链表来维护元素的插入顺序。
+
+最常见的操作之一是使用 `contains()` 测试成员归属性。
 
 
 
@@ -1676,11 +1858,3 @@ Java集合类库采用“持有对象”（holding objects）的思想，并将�
 
 
 #### 适配器方法惯用法 ####
-
-
-
-
-
-
-
-

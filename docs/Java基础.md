@@ -1211,6 +1211,12 @@ public class OuterClass {
 
 内部类不只是一种名字隐藏和组织代码的模式。当生成一个内部类的对象时，此对象与制造它的外围对象（enclosing object）之间就有了一种联系，所以**它能访问其外围对象的方法和字段**。
 
+为什么可以访问外部类的数据：
+
+- 编译器自动为内部类添加一个成员变量， 这个成员变量的类型和外部类的类型相同， 这个成员变量就是指向外部类对象（this）的引用；
+- 编译器自动为内部类的构造方法添加一个参数， 参数的类型是外部类的类型， 在构造方法内部使用这个参数为内部类中添加的成员变量赋值；
+- 在调用内部类的构造函数初始化内部类对象时，会默认传入外部类的引用。
+
 ```Java
 interface Selector {
     boolean end();
@@ -1439,25 +1445,157 @@ class A {
 
 #### 闭包与回调 ####
 
+**闭包（closure）是一个可调用的对象，它记录了一些信息，这些信息来自于创建它的作用域**。通过这个定义，**可以看出内部类是面向对象的闭包**，因为它不仅包含外围类对象（创建内部类的作用域）的信息，还自动拥有一个指向此外围类对象的引用，在此作用域内，内部类有权操作所有的成员，包括 **private** 成员。
 
+实现闭包的方式：**内部类** 和 **lambda 表达式**。
+
+通过内部类提供闭包的功能可以实现回调机制（callback）。
+
+```Java
+interface Incrementable {
+    void increment();
+}
+
+class Callee1 implements Incrementable {
+    private int i = 0;
+    @Override
+    public void increment() {
+        i++;
+        System.out.println(i);
+    }
+}
+
+class MyIncrement {
+    public void increment() {
+        System.out.println("Other operation");
+    }
+}
+//已经有了一个 increment() 方法，于是只能使用内部类独立地实现 Incrementable
+class Callee2 extends MyIncrement {
+    private int i = 0;
+    @Override
+    public void increment() {
+        super.increment();
+        i++;
+        System.out.println(i);
+    }
+    
+    private class Closure implements Incrementable {
+        @Override
+        public void increment() {
+            // Specify outer-class method, otherwise
+            // you'll get an infinite recursion:
+            Callee2.this.increment();
+        }
+    }
+    
+    Incrementable getCallbackReference() {
+        return new Closure();
+    }
+}
+
+//调用者 调用回调函数
+class Caller {
+    private Incrementable callbackReference;
+
+    Caller(Incrementable cbh) {
+        callbackReference = cbh;
+    }
+
+    void go() {
+        callbackReference.increment();
+    }
+}
+
+public class Callbacks {
+    public static void main(String[] args) {
+        //外部类实现接口 Incrementable
+        Callee1 c1 = new Callee1();
+        //内部类实现接口 Incrementable
+        Callee2 c2 = new Callee2();
+
+        Caller caller1 = new Caller(c1);
+        caller1.go();
+        caller1.go();
+        System.out.println("-------------");
+
+        Caller caller2 = new Caller(c2.getCallbackReference());
+        caller2.go();
+        caller2.go();
+    }
+}
+```
+
+**Caller** 的构造器需要一个 **Incrementable** 的引用作为参数（虽然可以在任意时刻捕获回调引用），然后在以后的某个时刻，**Caller** 对象可以使用此引用回调 **Callee** 类。回调的价值在于它的灵活性-可以在运行时动态地决定需要调用什么方法。
 
 #### 内部类与控制框架 ####
+
+应用程序框架（application framework）就是被设计用以解决某类特定问题的一个类或一组类。要运用某个应用程序框架，通常是继承一个或多个类，并覆盖某些方法。在覆盖后的方法中，编写代码定制应用程序框架提供的通用解决方案，以解决你的特定问题。这是设计模式中模板方法的一个例子，模板方法包含算法的基本结构，并且会调用一个或多个可覆盖的方法，以完成算法的动作。设计模式总是将变化的事物与保持不变的事物分离开，在这个模式中，模板方法是保持不变的事物，而可覆盖的方法就是变化的事物。
+
+控制框架是一类特殊的应用程序框架，它用来解决响应事件的需求。主要用来响应事件的系统被称作**事件驱动**系统。应用程序设计中常见的问题之一是图形用户接口（GUI），它几乎完全是事件驱动的系统。
+
+要理解内部类是如何允许简单的创建过程以及如何使用控制框架的，请考虑这样一个控制框架，它的工作就是在事件“就绪”的时候执行事件。虽然“就绪”可以指任何事，但在本例中是指基于时间触发的事件。接下来的问题就是，对于要控制什么，控制框架并不包含任何具体的信息。那些信息是在实现算法的 `action()` 部分时，通过继承来提供的。
+
+```Java
+public abstract class Event {
+    //瞬时时间戳
+    private Instant eventTime;
+    //时间间隔
+    protected final Duration delayTime;
+
+    public Event(long millisecondDelay) {
+        delayTime = Duration.ofMillis(millisecondDelay);
+        start();//开始计时
+    }
+
+    public void start() { // Allows restarting
+        eventTime = Instant.now().plus(delayTime);
+    }
+
+    public boolean ready() {
+        return Instant.now().isAfter(eventTime);
+    }
+
+    public abstract void action();
+}
+```
 
 
 
 ### 继承内部类 ###
 
+因为内部类的构造器必须连接到指向其外围类对象的引用，所以在继承内部类的时候，事情会变得有点复杂。问题在于，那个指向外围类对象的“秘密的”引用必须被初始化，而在派生类中不再存在可连接的默认对象。
 
-
-### 内部类可以被覆盖吗 ###
-
-
+```java
+class WithInner {
+    class Inner {}
+}
+public class InheritInner extends WithInner.Inner {
+    //- InheritInner() {} // Won't compile
+    InheritInner(WithInner wi) {
+        wi.super();
+    }
+    public static void main(String[] args) {
+        WithInner wi = new WithInner();
+        InheritInner ii = new InheritInner(wi);
+    }
+}
+```
 
 ### 局部内部类 ###
 
-
+可以在代码块里创建内部类，典型的方式是在一个方法体的里面创建。局部内部类不能有访问说明符，因为它不是外围类的一部分；但是它可以访问当前代码块内的常量，以及此外围类的所有成员。
 
 ### 内部类标识符 ###
 
+由于编译后每个类都会产生一个**.class** 文件，其中包含了如何创建该类型的对象的全部信息（此信息产生一个"meta-class"，叫做 **Class** 对象）。内部类也必须生成一个**.class** 文件以包含它们的 **Class** 对象信息。这些类文件的命名有严格的规则：外围类的名字，加上“**$**"，再加上内部类的名字。例如，**LocalInnerClass.java** 生成的 **.class** 文件包括：
 
+```java
+Counter.class
+LocalInnerClass$1.class
+LocalInnerClass$LocalCounter.class
+LocalInnerClass.class
+```
+
+如果内部类是匿名的，编译器会简单地产生一个数字作为其标识符。如果内部类是嵌套在别的内部类之中，只需直接将它们的名字加在其外围类标识符与“**$**”的后面。
 

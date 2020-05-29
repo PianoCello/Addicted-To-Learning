@@ -1831,30 +1831,131 @@ public class SetOfInteger {
 */
 ```
 
-早期 Java 版本中的 **HashSet** 产生的输出没有可辨别的顺序。这是因为出于对速度的追求， **HashSet** 使用了散列。由 **HashSet** 维护的顺序与 **TreeSet** 或 **LinkedHashSet** 不同，因为它们的实现具有不同的元素存储方式。 **TreeSet** 将元素存储在**红-黑树**数据结构中，而 **HashSet** 使用散列函数。 **LinkedHashSet** 因为查询速度的原因也使用了散列，但是看起来使用了链表来维护元素的插入顺序。
-
-最常见的操作之一是使用 `contains()` 测试成员归属性。
-
-
+早期 Java 版本中的 **HashSet** 产生的输出没有可辨别的顺序。这是因为出于对速度的追求， **HashSet** 使用了散列。由 **HashSet** 维护的顺序与 **TreeSet** 或 **LinkedHashSet** 不同，因为它们的实现具有不同的元素存储方式。 **TreeSet** 将元素存储在**红-黑树**数据结构中，而 **HashSet** 使用散列函数。 **LinkedHashSet** 因为查询速度的原因也使用了散列，但是看起来使用了链表来维护元素的插入顺序。**Set** 最常见的操作之一是使用 `contains()` 测试成员归属性。
 
 ### 映射 Map ###
 
+将对象映射到其他对象的能力是解决编程问题的有效方法。下面示例将使用一个 **String** 描述来查找 **Pet** 对象。它还展示了通过使用 `containsKey()` 和 `containsValue()` 方法去测试一个 **Map** ，以查看它是否包含某个键或某个值：
 
+```java
+public class PetMap {
+  public static void main(String[] args) {
+    Map<String, Pet> petMap = new HashMap<>();
+    petMap.put("My Cat", new Cat("Molly"));
+    petMap.put("My Dog", new Dog("Ginger"));
+    petMap.put("My Hamster", new Hamster("Bosco"));
+    System.out.println(petMap);
+    Pet dog = petMap.get("My Dog");
+    System.out.println(dog);
+    System.out.println(petMap.containsKey("My Dog"));
+    System.out.println(petMap.containsValue(dog));
+  }
+}
+/* Output:
+{My Dog=Dog Ginger, My Cat=Cat Molly, My
+Hamster=Hamster Bosco}
+Dog Ginger
+true
+true
+*/
+```
+
+**Map** 与数组和其他的 **Collection** 一样，可以轻松地扩展到多个维度，只需要创建一个值为 **Map** 的 **Map**（这些 **Map** 的值可以是其他集合，甚至是其他 **Map**）。因此，能够很容易地将集合组合起来以快速生成强大的数据结构。
 
 ### 队列 Queue ###
 
+队列是一个典型的“先进先出”（FIFO）集合。 即从集合的一端放入事物，再从另一端去获取它们，事物放入集合的顺序和被取出的顺序是相同的。队列通常被当做一种可靠的将对象从程序的某个区域传输到另一个区域的途径。队列在**并发编程**中尤为重要，因为它们可以安全地将对象从一个任务传输到另一个任务。
 
+**LinkedList** 实现了 **Queue** 接口，并且提供了一些方法以支持队列行为，因此 **LinkedList** 可以用作 **Queue** 的一种实现。 
 
 #### 优先级队列 PriorityQueue ####
 
+先进先出（FIFO）描述了最典型的*队列规则*（queuing discipline）。队列规则是指在给定队列中的一组元素的情况下，确定下一个弹出队列的元素的规则。先进先出声明的是下一个弹出的元素应该是等待时间最长的元素。
 
+优先级队列声明下一个弹出的元素是最需要的元素（具有最高的优先级）。例如，在机场，当飞机临近起飞时，这架飞机的乘客可以在办理登机手续时排到队头。如果构建了一个消息传递系统，某些消息比其他消息更重要，应该尽快处理，而不管它们何时到达。在Java 5 中添加了 **PriorityQueue** ，以便自动实现这种行为。
 
-### 集合与迭代器 ###
+**当在 PriorityQueue 上调用 `offer()` 方法来插入一个对象时，该对象会在队列中被排序**。默认的排序使用队列中对象的*自然顺序*（natural order），但是可以通过提供自己的 **Comparator** 来修改这个顺序。 **PriorityQueue** 确保在调用 `peek()` ， `poll()` 或 `remove()` 方法时，获得的元素将是队列中优先级最高的元素。
 
+**PriorityQueue** 是允许重复的，最小的值具有最高的优先级（如果是 **String** ，空格也可以算作值，并且比字母的优先级高）。为了展示如何通过提供自己的 **Comparator** 对象来改变顺序，对 **PriorityQueue<String>** 的调用使用了由 `Collections.reverseOrder()` （Java 5 中新添加的）产生的反序的 **Comparator** 。
 
+```Java
+public class PriorityQueueDemo {
+    static void printQ(Queue queue) {
+        while (queue.peek() != null)
+            System.out.print(queue.remove() + " ");
+        System.out.println();
+    }
+
+    public static void main(String[] args) {
+        String fact = "EDUCATION SHOULD ESCHEW OBFUSCATION";
+        List<String> strings = Arrays.asList(fact.split(""));
+
+        PriorityQueue<String> stringPQ = new PriorityQueue<>(strings.size(), Collections.reverseOrder());
+        stringPQ.addAll(strings);
+
+        PriorityQueueDemo.printQ(stringPQ);
+        //W U U U T T S S S O O O O N N L I I H H F E E E D D C C C B A A   
+    }
+}
+```
 
 ### for-each 和 迭代器 ###
 
+ Java 5 引入了一个名为 **Iterable** 的接口，该接口包含一个能够生成 **Iterator** 的 `iterator()` 方法。*for-each* 使用此 **Iterable** 接口来遍历序列。因此，如果创建了任何实现了 **Iterable** 的类，都可以将它用于 *for-each* 语句中。
 
+```java
+public class IterableClass implements Iterable<String> {
+    protected String[] words = ("And that is how " +
+            "we know the Earth to be banana-shaped."
+    ).split(" ");
 
-#### 适配器方法惯用法 ####
+    @Override
+    public Iterator<String> iterator() {
+        return new Iterator<String>() {
+            private int index = 0;
+
+            @Override
+            public boolean hasNext() {
+                return index < words.length;
+            }
+
+            @Override
+            public String next() {
+                return words[index++];
+            }
+
+            @Override
+            public void remove() { // Not implemented
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    public static void main(String[] args) {
+        for (String s : new IterableClass())
+            System.out.print(s + " ");
+    }
+}
+```
+
+#### 总结：Java 提供了许多保存对象的方法： ####
+
+1. 数组将数字索引与对象相关联。它保存类型明确的对象，因此在查找对象时不必对结果做类型转换。它可以是多维的，可以保存基本类型的数据。虽然可以在运行时创建数组，但是一旦创建数组，就无法更改数组的大小。
+2. **Collection** 保存单一的元素，而 **Map** 包含相关联的键值对。使用 Java 泛型，可以指定集合中保存的对象的类型，因此不能将错误类型的对象放入集合中，并且在从集合中获取元素时，不必进行类型转换。各种 **Collection** 和各种 **Map** 都可以在你向其中添加更多的元素时，自动调整其尺寸大小。集合不能保存基本类型，但自动装箱机制会负责执行基本类型和集合中保存的包装类型之间的双向转换。
+3. 除 **TreeSet** 之外的所有 **Set** 都具有与 **Collection** 完全相同的接口。**List** 和 **Collection** 存在着明显的不同，尽管 **List** 所要求的方法都在 **Collection** 中。另一方面，在 **Queue** 接口中的方法是独立的，在创建具有 **Queue** 功能的实现时，不需要使用 **Collection** 方法。最后， **Map** 和 **Collection** 之间唯一的交集是 **Map** 可以使用 `entrySet()` 和 `values()` 来产生 **Collection** 。
+4. 像数组一样， **List** 也将数字索引与对象相关联，因此，数组和 **List** 都是有序集合。
+5. 如果要执行大量的随机访问，则使用 **ArrayList** ，如果要经常从表中间插入或删除元素，则应该使用 **LinkedList** 。
+6. 队列和堆栈的行为是通过 **LinkedList** 提供的。
+7. **Map** 是一种将对象（而非数字）与对象相关联的设计。 **HashMap** 专为快速访问而设计，而 **TreeMap** 保持键始终处于排序状态，所以没有 **HashMap** 快。 **LinkedHashMap** 按插入顺序保存其元素，但使用散列提供快速访问的能力。
+8. **Set** 不接受重复元素。 **HashSet** 提供最快的查询速度，而 **TreeSet** 保持元素处于排序状态。 **LinkedHashSet** 按插入顺序保存其元素，但使用散列提供快速访问的能力。
+9. 不要在新代码中使用遗留类 **Vector** ，**Hashtable** 和 **Stack** 。
+
+下面是 Java 集合框架简图，黄色为接口，绿色为抽象类，蓝色为具体类。虚线箭头表示实现关系，实线箭头表示继承关系。
+
+![collection](../assets/java-foundation/collection.png)
+
+<center>Collection 集合框架</center>
+
+![map](../assets/java-foundation/map.png)
+
+<center>Map 集合框架</center>

@@ -1959,3 +1959,143 @@ public class IterableClass implements Iterable<String> {
 ![map](../assets/java-foundation/map.png)
 
 <center>Map 集合框架</center>
+
+
+
+## 函数式编程 ##
+
+函数式编程语言操纵**代码片段**就像操作数据一样容易。 虽然 Java 不是函数式语言，但 Java 8 Lambda 表达式和方法引用 (Method References) 允许你以函数式编程。
+
+OO（object oriented，面向对象）是抽象数据，FP（functional programming，函数式编程）是抽象行为。
+
+### 新旧对比 ###
+
+通常，传递给方法的数据不同，结果不同。如果我们希望方法在**调用时行为不同**，那么需要将代码片段传递给方法，以控制它的行为。
+
+```Java
+package com.hc.chronic_disease;
+
+interface Strategy {
+    String approach(String msg);
+}
+//普通的实现类
+class Soft implements Strategy {
+    @Override
+    public String approach(String msg) {
+        return msg.toLowerCase() + "?";
+    }
+}
+
+class Unrelated {
+    static String twice(String msg) {
+        return msg + " " + msg;
+    }
+}
+
+public class Strategize {
+    Strategy strategy;
+    String msg;
+
+    Strategize(String msg) {
+        strategy = new Soft(); // 默认策略
+        this.msg = msg;
+    }
+
+    void communicate() {
+        System.out.println(strategy.approach(msg));
+    }
+
+    void changeStrategy(Strategy strategy) {
+        this.strategy = strategy;
+    }
+
+    public static void main(String[] args) {
+        Strategy[] strategies = {
+                new Strategy() { // 匿名内部类
+                    @Override
+                    public String approach(String msg) {
+                        return msg.toUpperCase() + "!";
+                    }
+                },
+                //lambda 表达式 由箭头 -> 分隔开参数和函数体
+                msg -> msg.substring(0, 5),
+                //方法引用
+                Unrelated::twice
+        };
+
+        Strategize s = new Strategize("Hello there");
+        s.communicate();
+
+        for (Strategy newStrategy : strategies) {
+            s.changeStrategy(newStrategy); // 更换策略
+            //产生不同的行为，具体取决于此刻正在使用的策略代码对象。
+            s.communicate();
+        }
+    }
+}
+```
+
+**Strategy** 接口提供了单一的 `approach()` 方法来承载函数式功能。通过创建不同的 **Strategy** 对象，我们可以创建不同的行为。上面用传统实现、匿名内部类和 Java 8 的方法引用、Lambda 表达式分别演示。
+
+### Lambda 表达式 ###
+
+
+
+#### 递归 ####
+
+
+
+### 方法引用 ###
+
+
+
+#### Runnable 接口 ####
+
+
+
+#### 未绑定的方法引用 ####
+
+
+
+#### 构造函数引用 ####
+
+
+
+### 函数式接口 ###
+
+
+
+### 多参数函数式接口 ###
+
+
+
+### 缺少基本类型的函数 ###
+
+
+
+### 高阶函数 ###
+
+
+
+### 闭包 ###
+
+
+
+#### 作为闭包的内部类 ####
+
+
+
+### 函数组合 ###
+
+
+
+### 柯里化和部分求值 ###
+
+
+
+### 纯函数式编程 ###
+
+
+
+
+

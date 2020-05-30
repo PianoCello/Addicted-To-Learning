@@ -1443,6 +1443,7 @@ class A {
 
 举个例子，如果 **Sequence.java** 不使用内部类，就必须声明"**Sequence** 是一个 **Selector**"，对于某个特定的 **Sequence** 只能有一个 **Selector**，然而使用内部类很容易就能拥有另一个方法 `reverseSelector()`，用它来生成一个反方向遍历序列的 **Selector**，只有内部类才有这种灵活性。
 
+### 闭包
 
 **闭包（closure）是一个可调用的对象，它记录了一些信息，这些信息来自于创建它的作用域**。通过这个定义，**可以看出内部类是面向对象的闭包**，因为它不仅包含外围类对象（创建内部类的作用域）的信息，还自动拥有一个指向此外围类对象的引用，在此作用域内，内部类有权操作所有的成员，包括 **private** 成员。
 
@@ -2017,12 +2018,12 @@ public class Strategize {
                         return msg.toUpperCase() + "!";
                     }
                 },
-                //lambda 表达式 由箭头 -> 分隔开参数和函数体
+                // lambda 表达式 由箭头 -> 分隔开参数和函数体
                 msg -> msg.substring(0, 5),
-                //方法引用
+                // 方法引用
                 Unrelated::twice
         };
-
+        
         Strategize s = new Strategize("Hello there");
         s.communicate();
 
@@ -2035,65 +2036,558 @@ public class Strategize {
 }
 ```
 
-**Strategy** 接口提供了单一的 `approach()` 方法来承载函数式功能。通过创建不同的 **Strategy** 对象，我们可以创建不同的行为。上面用传统实现、匿名内部类和 Java 8 的方法引用、Lambda 表达式分别演示。
+上面用**传统实现、匿名内部类、 Java 8 的方法引用和 Lambda 表达式**分别演示。**Strategy** 接口提供了单一的 `approach()` 方法来承载函数式功能。通过创建不同的 **Strategy** 对象，我们可以创建不同的行为。
 
 ### Lambda 表达式 ###
 
+Lambda 表达式是使用**最小可能**语法编写的函数定义：
 
+1. Lambda 表达式产生函数，而不是类。 在 JVM 上，一切都是一个类，因此在幕后执行各种操作使 Lambda 看起来像函数 —— 但作为程序员，你可以高兴地假装它们“只是函数”。
+2. Lambda 语法尽可能少，这正是为了使 Lambda 易于编写和使用。
+
+任何 Lambda 表达式的基本语法是：
+
+1. 参数。
+2. 接着 `->`，可视为“产出”。
+3. `->` 之后的内容都是方法体。
+4. 方法体为单行的，该表达式的结果自动成为 Lambda 表达式的返回值。
+5. 方法体为多行的，则必须将这些行放在花括号中，有返回值的需要用 return。
+
+```Java
+interface Body {
+    String detailed(String head);
+}
+interface Description {
+    String brief();
+}
+interface Multi {
+    String twoArg(String head, Double d);
+}
+
+public class LambdaExpressions {
+    //当只有一个参数，可以不需要括号 ()，这是一个特例。
+    static Body bod = h -> h + " No Parents!";
+
+    //正常情况使用括号 () 包裹参数
+    static Body bod2 = (h) -> h + " More details";
+
+    //如果没有参数，则必须使用括号 () 表示空参数列表
+    static Description desc = () -> "Short info";
+
+    //对于多个参数，将参数列表放在括号 () 中
+    static Multi mult = (h, n) -> h + n;
+
+    //有返回值的需要用 return 
+    static Description moreLines = () -> {
+        System.out.println("moreLines()");
+        return "from moreLines()";
+    };
+    
+    public static void main(String[] args) {
+        System.out.println(bod.detailed("Oh!"));
+        System.out.println(bod2.detailed("Hi!"));
+        System.out.println(desc.brief());
+        System.out.println(mult.twoArg("Pi! ", 3.14159));
+        System.out.println(moreLines.brief());
+    }
+}
+```
 
 #### 递归 ####
 
+递归函数是一个自我调用的函数。可以编写递归的 Lambda 表达式，但需要注意：递归方法必须是实例变量或静态变量，否则会出现编译时错误。 `Fibonacci` 序列：
 
+```java
+interface IntCall {
+    int call(int arg);
+}
+public class RecursiveFibonacci {
+    IntCall fib;
+    RecursiveFibonacci() {
+        fib = n -> n == 0 ? 1 : n == 1 ? 1 : fib.call(n - 1) + fib.call(n - 2);
+    }
+    // lambda 表达式实现
+    int fibonacci(int n) {
+        return fib.call(n);
+    }
+    // 普通实现
+    static int fib(int n) {
+        if (n == 0) {
+            return 1;
+        } else if (n == 1) {
+            return 1;
+        } else {
+            return fib(n - 1) + fib(n - 2);
+        }
+    }
+    public static void main(String[] args) {
+        RecursiveFibonacci rf = new RecursiveFibonacci();
+        for (int i = 0; i <= 10; i++) {
+            System.out.println(rf.fibonacci(i));
+        }
+        for (int i = 0; i <= 10; i++) {
+            System.out.println(fib(i));
+        }
+    }
+}
+```
 
 ### 方法引用 ###
 
+Java 8 方法引用组成：类名或对象名，后面跟 `::` ，然后跟方法名称。
 
+```java
+interface Callable {
+    void call(String s);
+}
+class Describe {
+    //show() 参数类型和返回类型符合 Callable 的 call() 。
+    void show(String msg) {
+        System.out.println(msg);
+    }
+}
+public class MethodReferences {
+    static void hello(String name) {
+        System.out.println("Hello, " + name);
+    }
+    static class Description {
+        String about;
+        Description(String desc) {
+            about = desc;
+        }
+        void help(String msg) {
+            System.out.println(about + " " + msg);
+        }
+    }
+    static class Helper {
+        static void assist(String msg) {
+            System.out.println(msg);
+        }
+    }
+    public static void main(String[] args) {
+        Describe d = new Describe();
+        //将 Describe 对象的方法引用赋值给 Callable
+        Callable c = d::show;
+        
+        //调用 call() 来调用 show()，存在某种映射。
+        c.call("call()");
+        
+        // 静态 方法引用
+        c = MethodReferences::hello;
+        c.call("Bob");
+        
+        //对已实例化对象的方法的引用
+        c = new Description("valuable")::help;
+        c.call("information");
+        
+        // 静态内部类的方法引用
+        c = Helper::assist;
+        c.call("Help!");
+    }
+}
+```
 
 #### Runnable 接口 ####
 
+它也符合特殊的单方法接口格式：它的方法 `run()` 不带参数，也没有返回值。因此，我们可以使用 Lambda 表达式和方法引用作为 **Runnable**：
 
+```java
+class Go {
+  static void go() {
+    System.out.println("Go::go()");
+  }
+}
+
+public class RunnableMethodReference {
+  public static void main(String[] args) {
+
+    new Thread(new Runnable() {
+      public void run() {
+        System.out.println("Anonymous");
+      }
+    }).start();
+
+    new Thread(
+      () -> System.out.println("lambda")
+    ).start();
+
+    new Thread(Go::go).start();
+  }
+}
+```
+
+**Thread** 对象将 **Runnable** 作为其构造函数参数，并具有会调用 `run()` 的方法 `start()`。 **注意**，只有**匿名内部类**才需要具有名为 `run()` 的方法。
 
 #### 未绑定的方法引用 ####
 
+未绑定的方法引用是指没有关联对象的普通（非静态）方法。 使用未绑定的引用之前，我们必须先提供对象：
 
+```java
+class This {
+    void two(int i, double d) {
+    }
+    void three(int i, double d, String s) {
+    }
+}
+
+interface TwoArgs {
+    void call2(This athis, int i, double d);
+}
+
+interface ThreeArgs {
+    void call3(This athis, int i, double d, String s);
+}
+
+public class MultiUnbound {
+    public static void main(String[] args) {
+        //未绑定的方法引用是指没有关联对象的普通（非静态）方法。
+        TwoArgs twoargs = This::two;
+        ThreeArgs threeargs = This::three;
+
+        This athis = new This();
+
+        twoargs.call2(athis, 11, 3.14);
+        threeargs.call3(athis, 11, 3.14, "Three");
+    }
+}
+```
+
+使用未绑定的引用时，函数式方法的签名（接口中的单个方法）不再与方法引用的签名完全匹配。 原因是：**你需要一个对象来调用引用的方法。**Java 必须拿到第一个参数（调用引用方法的对象），这个参数将会在调用方法的时候传入。
 
 #### 构造函数引用 ####
 
+你还可以捕获构造函数的引用，然后通过引用调用该构造函数。
 
+```java
+class Dog {
+  String name;
+  int age = -1; // For "unknown"
+  Dog() { name = "stray"; }
+  Dog(String nm) { name = nm; }
+  Dog(String nm, int yrs) { name = nm; age = yrs; }
+}
+
+interface MakeNoArgs {
+  Dog make();
+}
+
+interface Make1Arg {
+  Dog make(String nm);
+}
+
+interface Make2Args {
+  Dog make(String nm, int age);
+}
+
+public class CtorReference {
+  public static void main(String[] args) {
+    MakeNoArgs mna = Dog::new; // [1]
+    Make1Arg m1a = Dog::new;   // [2]
+    Make2Args m2a = Dog::new;  // [3]
+
+    Dog dn = mna.make();
+    Dog d1 = m1a.make("Comet");
+    Dog d2 = m2a.make("Ralph", 4);
+  }
+}
+```
+
+**Dog** 有三个构造函数，函数接口内的 `make()` 方法反映了构造函数参数列表。
+
+**注意**：我们如何对 **[1]**，**[2]** 和 **[3]** 中的每一个使用 `Dog :: new`。 这 3 个构造函数只有一个相同名称：`:: new`，但在每种情况下都赋值给不同的接口。编译器可以检测并知道从哪个构造函数引用。
+
+编译器知道调用**函数式方法**就相当于调用**构造函数**。
 
 ### 函数式接口 ###
 
+如果将方法引用或 Lambda 表达式赋值给函数式接口（类型需要匹配），Java 会适配你的赋值到目标接口。 编译器会自动包装方法引用或 Lambda 表达式到实现目标接口的类的实例中。
 
+Java 8 引入了 `java.util.function` 包。它包含一组接口，这些接口是 Lambda 表达式和方法引用的目标类型。 每个接口只包含一个抽象方法，称为**函数式接口**，这些接口都有可选的注解 `@FunctionalInterface`  标识。
+
+`java.util.function` 包旨在创建一组完整的目标接口，使得我们一般情况下不需再定义自己的接口。这主要是因为基本类型会产生一小部分接口。 如果你了解命名模式，顾名思义就能知道特定接口的作用。
+
+以下是基本命名准则：
+
+1. 如果只处理对象而非基本类型，名称则为 `Function`，`Supplier`，`Consumer`，`Predicate` 等。参数类型通过泛型添加。
+2. 如果接收的参数是基本类型，则由名称的第一部分表示，如 `LongConsumer`，`DoubleFunction`，`IntPredicate` 等，但基本 `Supplier` 类型例外。
+3. 如果返回值为基本类型，则用 `To` 表示，如 `ToLongFunction <T>` 和 `IntToLongFunction`。
+4. 如果返回值类型与参数类型一致，则是一个运算符：单个参数使用 `UnaryOperator`，两个参数使用 `BinaryOperator`。
+5. 如果接收参数且返回值为布尔值，则是一个谓词（Predicate）。
+6. 如果接收的两个参数类型不同，则名称中有一个 `Bi`。
+
+下表描述了 `java.util.function` 中的目标类型（包括例外情况）：
+
+| **特征**                                              |                       **函数式方法名**                       |                           **示例**                           |
+| :---------------------------------------------------- | :----------------------------------------------------------: | :----------------------------------------------------------: |
+| 无参数；  <br/>无返回值                               |        **Runnable**  <br/>(java.lang)  <br/>  `run()`        |                         **Runnable**                         |
+| 无参数；  <br/>返回类型任意                           |        **Supplier**  <br/>`get()` <br/> `getAs类型()`        | **Supplier`<T>` <br/>  BooleanSupplier  <br/> IntSupplier  <br/> LongSupplier  <br/> DoubleSupplier** |
+| 无参数； <br/> 返回类型任意                           |  **Callable**  <br/>(java.util.concurrent) <br/>  `call()`   |                      **Callable`<V>`**                       |
+| 1 参数； <br/> 无返回值                               |                **Consumer** <br/> `accept()`                 | **`Consumer<T>` <br/> IntConsumer <br/> LongConsumer <br/> DoubleConsumer** |
+| 2 参数 **Consumer**                                   |               **BiConsumer**  <br/>`accept()`                |                    **`BiConsumer<T,U>`**                     |
+| 2 参数 **Consumer**；<br/>  1 引用；<br/>  1 基本类型 |             **Obj类型Consumer**  <br/>`accept()`             | **`ObjIntConsumer<T>` <br/> `ObjLongConsumer<T>` <br/> `ObjDoubleConsumer<T>`** |
+| 1 参数；<br/>  返回类型不同                           | **Function** <br/> `apply()` <br/> **To类型** 和 **类型To类型** <br/> `applyAs类型()` | **Function`<T,R>` <br/> IntFunction`<R>` <br/> `LongFunction<R>` <br/> DoubleFunction`<R>` <br/> ToIntFunction`<T>` <br/> `ToLongFunction<T>` <br/> `ToDoubleFunction<T>` <br/> IntToLongFunction <br/> IntToDoubleFunction <br/> LongToIntFunction <br/> LongToDoubleFunction  <br/>DoubleToIntFunction  <br/>DoubleToLongFunction** |
+| 1 参数；<br/>  返回类型相同                           |              **UnaryOperator**  <br/>`apply()`               | **`UnaryOperator<T>` <br/> IntUnaryOperator <br/> LongUnaryOperator <br/> DoubleUnaryOperator** |
+| 2 参数类型相同；<br/>  返回类型相同                   |              **BinaryOperator** <br/> `apply()`              | **`BinaryOperator<T>` <br/> IntBinaryOperator <br/> LongBinaryOperator <br/> DoubleBinaryOperator** |
+| 2 参数类型相同; <br/> 返回整型                        |        Comparator  <br/>(java.util)  <br/>`compare()`        |                     **`Comparator<T>`**                      |
+| 2 参数；<br/>  返回布尔型                             |                 **Predicate** <br/> `test()`                 | **`Predicate<T>` <br/> `BiPredicate<T,U>` <br/> IntPredicate <br/> LongPredicate <br/> DoublePredicate** |
+| 参数基本类型；<br/>  返回基本类型                     |         **类型To类型Function** <br/> `applyAs类型()`         | **IntToLongFunction <br/> IntToDoubleFunction <br/> LongToIntFunction <br/> LongToDoubleFunction  <br/>DoubleToIntFunction  <br/>DoubleToLongFunction** |
+| 2 参数类型不同                                        |                **Bi操作** <br/> (不同方法名)                 | **`BiFunction<T,U,R>` <br/> `BiConsumer<T,U>` <br/> `BiPredicate<T,U>` <br/> `ToIntBiFunction<T,U>` <br/> `ToLongBiFunction<T,U>` <br/> `ToDoubleBiFunction<T>`** |
+
+可以看出，在创建 `java.util.function` 时，设计者们做出了一些选择。
+
+```java
+class In1 {}
+class In2 {}
+
+public class MethodConversion {
+    static void accept(In1 i1, In2 i2) {
+        System.out.println("accept()");
+    }
+
+    static void someOtherName(In1 i1, In2 i2) {
+        System.out.println("someOtherName()");
+    }
+
+    public static void main(String[] args) {
+        BiConsumer<In1,In2> bic;
+
+        bic = MethodConversion::accept;
+        bic.accept(new In1(), new In2());
+
+        bic = MethodConversion::someOtherName;
+        bic.accept(new In1(), new In2());
+
+        bic = (in1, in2) -> System.out.println("lambda");
+        bic.accept(new In1(), new In2());
+    }
+}
+```
+
+在使用函数接口时，名称无关紧要——只要参数类型和返回类型相同。 Java 会将你的方法映射到接口方法。 **要调用方法，应该调用接口的函数式方法名，而不是你的方法名**。
 
 ### 多参数函数式接口 ###
 
+`java.util.functional` 中的接口是有限的。比如有了 `BiFunction`，但它不能变化。 如果需要三参数函数的接口怎么办？ 其实这些接口非常简单，很容易查看 Java 库源代码并自行创建。代码示例：
 
+```java
+@FunctionalInterface
+public interface TriFunction<T, U, V, R> {
+    R apply(T t, U u, V v);
+}
 
-### 缺少基本类型的函数 ###
-
-
+public class TriFunctionTest {
+  static int f(int i, long l, double d) { return 99; }
+  public static void main(String[] args) {
+    TriFunction<Integer, Long, Double, Integer> tf =
+      TriFunctionTest::f; //方法引用
+    tf = (i, l, d) -> 12; //lambda 表达式
+  }
+}
+```
 
 ### 高阶函数 ###
 
+**高阶函数（Higher-order Function）是指接受另外一个函数作为参数，或返回一个函数的函数**。
 
+我们先来看看如何产生一个函数：
+
+```java
+interface FuncSS extends Function<String, String> {} // [1]
+
+public class ProduceFunction {
+  static FuncSS produce() {
+    return s -> s.toLowerCase(); // [2]
+  }
+  public static void main(String[] args) {
+    FuncSS f = produce();
+    System.out.println(f.apply("YELLING"));
+  }
+}
+```
+
+这里，`produce()` 是高阶函数。
+
+**[1]** 使用继承，可以轻松地为专用接口创建别名。
+
+**[2]** 使用 Lambda 表达式，可以轻松地在方法中创建和返回一个函数。
+
+要消费一个函数，消费函数需要在参数列表正确地描述函数类型。代码示例：
+
+```java
+class One {}
+class Two {}
+
+public class ConsumeFunction {
+  static Two consume(Function<One,Two> onetwo) {
+    return onetwo.apply(new One());
+  }
+  public static void main(String[] args) {
+    Two two = consume(one -> new Two());
+  }
+}
+```
 
 ### 闭包 ###
 
+前面已经讨论过闭包，闭包可以用内部类或 lambda 表达式实现，闭包可以访问创建它的作用域的信息。下面例子展示了各种类型变量和 lambda 表达式的关系：
 
+```java
+class Closure1 {
+    int i; //非局部变量将会被多个 lambda 共享
+    IntSupplier makeFun(int x) {
+        return () -> x + i++;
+    }
+}
+
+class Closure3 {
+    IntSupplier makeFun(int x) {
+        int i = 0;
+        // x++ 和 i++ 都会报错：
+        //被 Lambda 表达式引用的局部变量必须是 final 或者是等同 final 效果的。
+        return () -> x++ + i++;
+    }
+}
+
+public class Closure7 {
+  IntSupplier makeFun(int x) {
+    //编译报错，包装类型的值被修改了
+    Integer i = 0;
+    i = i + 1;
+    return () -> x + i;
+  }
+}
+
+public class Closure8 {
+  Supplier<List<Integer>> makeFun() {
+    final List<Integer> ai = new ArrayList<>();
+    //应用于对象引用的 final 关键字仅表示不会重新赋值引用。
+    //它并不代表你不能修改对象本身。
+    ai.add(1);
+    return () -> ai;
+  }
+}
+public class SharedStorage {
+    public static void main(String[] args) {
+        Closure1 c1 = new Closure1();
+
+        IntSupplier f1 = c1.makeFun(0);
+        IntSupplier f2 = c1.makeFun(0);
+        
+        System.out.println(f1.getAsInt());
+        System.out.println(f2.getAsInt());
+        //输出 0 1  说明 i 被共享了
+    }
+}
+```
 
 #### 作为闭包的内部类 ####
 
+使用匿名内部类重写之前的例子：
 
+```java
+public class AnonymousClosure {
+    IntSupplier makeFun(int x) {
+        int i = 0;
+        // i++; //报错，非等同 final 效果
+        return new IntSupplier() {
+            public int getAsInt() { return x + i; }
+        };
+    }
+}
+```
+
+实际上只要有内部类，就会有闭包。在 Java 8 之前，变量 `x` 和 `i` 必须被明确声明为 `final`。在 Java 8 中，内部类的规则放宽，包括**等同 final 效果**。
 
 ### 函数组合 ###
 
+函数组合（Function Composition）意为“多个函数组合成新函数”。它通常是函数式编程的基本组成部分。一些 `java.util.function` 接口中包含支持函数组合的方法。
 
+|                       组合方法                        | 支持接口                                                     |
+| :---------------------------------------------------: | :----------------------------------------------------------- |
+|     `andThen(argument)`<br/> 根据参数执行原始操作     | **Function <br/>BiFunction <br/>Consumer <br/>BiConsumer <br/>IntConsumer <br/>LongConsumer<br/>DoubleConsumer<br/>UnaryOperator<br/>IntUnaryOperator<br/>LongUnaryOperator <br/>DoubleUnaryOperator<br/>BinaryOperator** |
+|    `compose(argument)` <br/> 根据参数执行原始操作     | **Function <br/>UnaryOperator<br/>IntUnaryOperator <br/>LongUnaryOperator<br/>DoubleUnaryOperator** |
+| `and(argument)` <br/>短路**逻辑与**原始谓词和参数谓词 | **Predicate<br/>BiPredicate <br/>IntPredicate <br/>LongPredicate<br/>DoublePredicate** |
+| `or(argument)` <br/>短路**逻辑或**原始谓词和参数谓词  | **Predicate<br/>BiPredicate<br/>IntPredicate<br/>LongPredicate<br/>DoublePredicate** |
+|        `negate()` <br/>该谓词的**逻辑否**谓词         | **Predicate<br/>BiPredicate<br/>IntPredicate<br/>LongPredicate<br/>DoublePredicate** |
+
+下例使用了 `Function` 里的 `compose()`和 `andThen()`。代码示例：
+
+```java
+public class FunctionComposition {
+    static Function<String, String>
+            f1 = s -> {
+        System.out.println(s);
+        return s.replace('A', '_');
+    },
+            f2 = s -> s.substring(3),
+            f3 = s -> s.toLowerCase(),
+            f4 = f1.compose(f2).andThen(f3);
+
+    public static void main(String[] args) {
+        String str = f4.apply("GO AFTER ALL AMBULANCES");
+        System.out.println(str);
+        //AFTER ALL AMBULANCES
+	   //_fter _ll _mbul_nces
+    }
+}
+```
+
+这里我们重点看正在创建的新函数 `f4`。它调用 `apply()` 的方式与常规几乎无异，当 `f1` 获得字符串时，它已经被`f2` 剥离了前三个字符。这是因为 `compose（f2）` 表示 `f2` 的调用发生在 `f1` 之前，执行了 `f1` 之后，最后执行 `f3`。
+
+下例是 `Predicate` 的逻辑运算演示.代码示例：
+
+```java
+public class PredicateComposition {
+  static Predicate<String>
+    p1 = s -> s.contains("bar"),
+    p2 = s -> s.length() < 5,
+    p3 = s -> s.contains("foo"),
+    p4 = p1.negate().and(p2).or(p3);
+  public static void main(String[] args) {
+    Stream.of("bar", "foobar", "foobaz", "fongopuckey")
+      .filter(p4)
+      .forEach(System.out::println);
+      //foobar
+      //foobaz
+  }
+}
+```
+
+`p4` 获取到了所有谓词并组合成一个更复杂的谓词。解读：如果字符串中不包含 `bar` 且长度小于 5，或者它包含 `foo` ，则结果为 `true`。
+
+从输出结果我们可以看到 `p4` 的工作流程：任何带有 `foo` 的东西都会留下，即使它的长度大于 5。 `fongopuckey` 因长度超出和不包含 `bar` 而被丢弃。
 
 ### 柯里化和部分求值 ###
 
+柯里化：将一个多参数的函数，转换为一系列单参数函数。
 
+```java
+public class CurryingAndPartials {
+    // 未柯里化:
+    static String uncurried(String a, String b) {
+        return a + b;
+    }
+    public static void main(String[] args) {
+        // 柯里化的函数:
+        Function<String, Function<String, String>> sum =
+                a -> b -> a + b;
 
-### 纯函数式编程 ###
+        System.out.println(uncurried("Hi ", "Ho"));
+
+        Function<String, String> hi = sum.apply("Hi ");
+        System.out.println(hi.apply("Ho"));
+
+        // 部分应用:
+        Function<String, String> sumHi = sum.apply("Hup ");
+        System.out.println(sumHi.apply("Ho"));
+        System.out.println(sumHi.apply("Hey"));
+    }
+}
+```
+
+柯里化的目的是能够通过提供一个参数来创建一个新函数，所以现在有了一个“带参函数”和剩下的 “无参函数” 。实际上，你从一个双参数函数开始，最后得到一个单参数函数。
+
+总结：Lambda 表达式和方法引用并没有将 Java 转换成函数式语言，而是提供了对函数式编程的支持。这对 Java 来说是一个巨大的改进。因为这允许你编写更简洁明了，易于理解的代码。
 
 
 

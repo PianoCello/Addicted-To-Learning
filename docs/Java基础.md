@@ -2591,5 +2591,546 @@ public class CurryingAndPartials {
 
 
 
+## 流式编程
+
+集合优化了对象的存储，而流和对象的处理有关。流是一系列与特定存储机制无关的元素——实际上，流并没有“存储”之说。
+
+利用流，我们无需迭代集合中的元素，就可以提取和操作它们。这些管道通常被组合在一起，在流上形成一条操作管道。
+
+在大多数情况下，将对象存储在集合中是为了处理他们，因此你将会发现你将把编程的主要焦点从集合转移到了流上。流的一个核心好处是，它使得程序更加短小并且更易理解。当 Lambda 表达式和方法引用和流一起使用的时候会让人感觉自成一体。
+
+**流是懒加载的**。这代表着它只在绝对必要时才计算。你可以将流看作“延迟列表”。由于计算延迟，流使我们能够表示非常大（甚至无限）的序列，而不需要考虑内存问题。**我们每次使用都必须从头创建流，因为流并不能被复用。**
+
+### 流支持
+
+为了不破坏现有的接口实现类，Java 8 在接口中添加被 `default`（`默认`）修饰的方法，将流式（*stream*）方法平滑地嵌入到现有类中。
+
+流方法预置的操作几乎已满足了我们平常所有的需求。流操作的类型有三种：创建流，修改流元素（中间操作， Intermediate Operations），消费流元素（终端操作， Terminal Operations）。最后一种类型通常意味着收集流元素（通常是到集合中）。
+
+### 流创建
+
+#### Stream.of() 方法
+
+通过 `Stream.of()` 很容易地将一组元素转化成为流。
+
+```java
+public class StreamOf {
+    public static void main(String[] args) {
+        Stream.of(3.14159, 2.718, 1.618)
+            .forEach(System.out::println);
+        
+        Stream.of("It's ", "a ", "wonderful ", "day ", "for ", "pie!")
+            .forEach(System.out::print);
+    }
+}
+```
+
+#### 集合对象的 stream() 方法
+
+每个集合对象都可以通过调用 `stream()` 方法来产生一个流。
+
+```java
+public class CollectionToStream {
+    public static void main(String[] args) {
+        List<Bubble> bubbles = Arrays.asList(new Bubble(1), new Bubble(2));
+        System.out.println(bubbles.stream()
+            .mapToInt(b -> b.i)
+            .sum());
+        
+        Set<String> w = new HashSet<>(Arrays.asList("It's a wonderful day for pie!".split(" ")));
+        w.stream()
+         .map(x -> x + " ")
+         .forEach(System.out::print);
+        System.out.println();
+
+        Map<String, Double> m = new HashMap<>();
+        m.put("pi", 3.14159);
+        m.put("e", 2.718);
+        m.put("phi", 1.618);
+        m.entrySet().stream()
+                    .map(e -> e.getKey() + ": " + e.getValue())
+                    .forEach(System.out::println);
+    }
+}
+```
+
+中间操作 `map()` 会获取流中的所有元素，并且对流中元素应用操作从而产生新的元素，并将其传递到后续的流中。通常 `map()` 会获取对象并产生新的对象，但在这里产生了特殊的用于数值类型的流。例如，`mapToInt()` 方法将一个对象流（object stream）转换成包含整型数字的 `IntStream`。
+
+#### 随机数的流方法
+
+`Random` 类被一组生成流的方法增强了。
+
+```java
+public class RandomGenerators {
+    public static <T> void show(Stream<T> stream) {
+        stream
+        .limit(4)
+        .forEach(System.out::println);
+        System.out.println("++++++++");
+    }
+
+    public static void main(String[] args) {
+        Random rand = new Random(47);
+        // boxed() 将IntStream 变换成 Stream<Integer> 
+        show(rand.ints().boxed());
+        show(rand.longs().boxed());
+        show(rand.doubles().boxed());
+        // 控制上限和下限：
+        show(rand.ints(10, 20).boxed());
+        show(rand.longs(50, 100).boxed());
+        show(rand.doubles(20, 30).boxed());
+        // 控制流大小：
+        show(rand.ints(2).boxed());
+        show(rand.longs(2).boxed());
+        show(rand.doubles(2).boxed());
+        // 控制流的大小和界限
+        show(rand.ints(3, 3, 9).boxed());
+        show(rand.longs(3, 12, 22).boxed());
+        show(rand.doubles(3, 11.5, 12.3).boxed());
+    }
+}
+```
+
+**Random** 类只能生成基本类型 **int** (IntStream)， **long** (LongStream)， **double** (DoubleStream) 的流。`boxed()` 方法将会自动地把基本类型包装成为对应的装箱类型，从而使得 `show()` 能够接受流。
+
+#### Stream.generate() 方法
+
+ Stream.`generate()` 需要传入一个 `Supplier<T>` 类型的参数。
+
+```java
+public class Generator implements Supplier<String> {
+    Random rand = new Random(47);
+    char[] letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
+
+    public String get() {// Supplier 的方法
+        return "" + letters[rand.nextInt(letters.length)];
+    }
+
+    public static void main(String[] args) {
+        String word = Stream.generate(new Generator())
+                            .limit(30)
+                            .collect(Collectors.joining());
+        System.out.println(word);
+    }
+}
+```
+
+创建**包含相同对象的流**，只需传递一个生成那些对象的 `lambda` 到 `generate()` 中：
+
+```java
+public class Duplicator {
+    public static void main(String[] args) {
+        Stream.generate(() -> "duplicate")
+              .limit(10) // 10 个相同的对象
+              .forEach(System.out::println);
+    }
+}
+```
+
+#### Stream.iterate() 方法
+
+**Stream.**`iterate()` 以种子（第一个参数）开头，并将其传给方法（第二个参数）。方法的结果将添加到流，并存储作为第一个参数用于下次调用 `iterate()`，依次类推。我们可以利用 `iterate()` 生成一个斐波那契数列。代码示例：
+
+```java
+public class Fibonacci {
+    int x = 1;
+    Stream<Integer> numbers() {
+        return Stream.iterate(0, i -> {
+            int result = x + i;
+            x = i;
+            return result;
+        });
+    }
+    public static void main(String[] args) {
+        new Fibonacci().numbers()
+                       .skip(20) // 过滤前 20 个
+                       .limit(10) // 然后取 10 个
+                       .forEach(System.out::println);
+    }
+}
+```
+
+斐波那契数列将数列中最后两个元素进行求和以产生下一个元素。`iterate()` 只能记忆结果，因此我们需要利用一个变量 `x` 追踪另外一个元素。
+
+#### 流的建造者模式
+
+在建造者模式中，首先创建一个 `builder` 对象，传递给它多个构造器信息，最后执行“构造”。**Stream** 库提供了这样的 `Builder`。读取文件并将其转换成为单词流。代码示例：
+
+```java
+public class FileToWordsBuilder {
+    Stream.Builder<String> stringBuilder = Stream.builder();
+	Stream<String> stream() {
+        return stringBuilder.build();
+    }
+    
+    public FileToWordsBuilder(String filePath) throws Exception {
+        Files.lines(Paths.get(filePath))
+             .skip(1) // 略过开头的注释行
+             .forEach(line -> {
+                  for (String w : line.split("[ .?,]+"))
+                      stringBuilder.add(w);
+              });
+    }
+    public static void main(String[] args) throws Exception {
+        new FileToWordsBuilder("Cheese.dat")
+            .stream()
+            .limit(7)
+            .map(w -> w + " ")
+            .forEach(System.out::print);
+        // Not much of a cheese shop really
+    }
+}
+/*
+// Cheese.dat 文件
+Not much of a cheese shop really, is it?
+Finest in the district, sir.
+And what leads you to that conclusion?
+Well, it's so clean.
+It's certainly uncontaminated by cheese. */
+```
+
+**注意**，构造器会添加文件中的所有单词（第一行被忽略），但是其并没有调用 `build()`。只要你不调用 `stream()` 方法，就可以继续向 `builder` 对象中添加单词。
+
+在该类的更完整形式中，你可以添加一个标志位用于查看 `build()` 是否被调用，并且可能的话增加一个可以添加更多单词的方法。在 `Stream.Builder` 调用 `build()` 方法后继续尝试添加单词会产生一个异常。
+
+#### Arrays.stream()
+
+`Arrays` 类中含有一个名为 `stream()` 的静态方法用于把数组转换成为流，它可以产生 **IntStream**，**LongStream** ， **DoubleStream **和 **Stream<T>**（传入 T 类型的对象数组即可）。
+
+```java
+public static void main(String[] args) throws Exception {
+    IntStream stream = Arrays.stream(new int[]
+            {1, 2, 5, 4, 8, 8, 5, 85, 8, 5, 5, 5, 5});
+    stream.distinct()
+            .skip(2).
+            sorted().
+            forEach(System.out::println);
+}
+```
+
+#### 正则表达式
+
+Java 8 在 `java.util.regex.Pattern` 中增加了一个新的方法 `splitAsStream()`。这个方法可以根据传入的公式将字符序列转化为流。但是有一个限制，输入只能是 **CharSequence**，因此不能将流作为 `splitAsStream()` 的参数。
+
+使用流将文件分割为单独的字符串，接着使用正则表达式将字符串转化为单词流。
+
+```java
+public class FileToWordsRegexp {
+    private String all;
+    public FileToWordsRegexp(String filePath) throws Exception {
+        all = Files.lines(Paths.get(filePath))
+        .skip(1) // First (comment) line
+        .collect(Collectors.joining(" "));
+    }
+    public Stream<String> stream() {
+        return Pattern
+        .compile("[ .,?]+").splitAsStream(all);
+    }
+    public static void
+    main(String[] args) throws Exception {
+        FileToWordsRegexp fw = new FileToWordsRegexp("Cheese.dat");
+        fw.stream()
+          .limit(7)
+          .map(w -> w + " ")
+          .forEach(System.out::print);
+        fw.stream()
+          .skip(7)
+          .limit(2)
+          .map(w -> w + " ")
+          .forEach(System.out::print);
+    }
+}
+```
+
+在构造器中读取文件中的所有内容并将其转化成为单行字符串存到变量 `all` 中。调用 `stream()` 会在已存储的字符串中创建一个新的流。这里有个限制，整个文件内容必须存储在内存中；
+
+### 中间操作
+
+中间操作用于从一个流中获取对象，并将对象作为另一个流从后端输出，以连接到其他操作。
+
+#### 跟踪和调试
+
+`peek()` 操作的目的是帮助调试。它允许你无修改地查看流中的元素。代码示例：
+
+```java
+class FileToWords {
+    static Stream<String> stream(String filePath) throws Exception {
+        return Files.lines(Paths.get(filePath))
+                .skip(1)
+                .flatMap(line ->
+                        Pattern.compile("\\W+").splitAsStream(line));
+    }
+}
+class Peeking {
+    public static void main(String[] args) throws Exception {
+        FileToWords.stream("Cheese.dat")
+                .skip(21)
+                .limit(4)
+                .map(w -> w + " ")
+                .peek(System.out::print)
+                .map(String::toUpperCase)
+                .peek(System.out::print)
+                .map(String::toLowerCase)
+                .forEach(System.out::print);
+            //Well WELL well it IT it s S s so SO so
+    }
+}
+```
+
+#### 流元素排序
+
+ `sorted()` 可以实现自然排序，它还有重载方法：传入一个 **Comparator** 参数。代码示例：
+
+```java
+public class SortedComparator {
+    public static void main(String[] args) throws Exception {
+        FileToWords.stream("Cheese.dat")
+        .skip(10)
+        .limit(10)
+        .sorted(Comparator.reverseOrder())
+        .map(w -> w + " ")
+        .forEach(System.out::print);
+    }
+}
+```
+
+`sorted()` 预设了一些默认的比较器。这里我们使用的是反转“自然排序”。当然你也可以把 Lambda 函数作为参数传递给 `sorted()`。
+
+#### 移除元素
+
+- `distinct()`：可用于消除流中的重复元素。相比创建一个 **Set** 集合，该方法的工作量要少得多。
+- `filter(Predicate)`：过滤操作会保留与传递进去的过滤器函数计算结果为 `true` 元素。
+
+在下例中，`isPrime()` 作为过滤器函数，用于检测质数。
+
+```java
+public class Prime {
+    public static Boolean isPrime(long n) {
+        return LongStream.rangeClosed(2, (long)Math.sqrt(n))
+        .noneMatch(i -> n % i == 0);
+    }
+    public LongStream numbers() {
+        return LongStream.iterate(2, i -> i + 1)
+        .filter(Prime::isPrime);
+    }
+    public static void main(String[] args) {
+        new Prime().numbers()
+        .limit(10)
+        .forEach(n -> System.out.format("%d ", n));
+        System.out.println();
+        
+        new Prime().numbers()
+        .skip(90)
+        .limit(10)
+        .forEach(n -> System.out.format("%d ", n));
+    }
+}
+```
+
+`rangeClosed()` 包含了上限值。如果不能整除，即余数不等于 0，则 `noneMatch()` 操作返回 `true`，如果出现任何等于 0 的结果则返回 `false`。 `noneMatch()` 操作一旦有失败就会退出。
+
+#### map() 应用函数到元素
+
+- `map(Function)`：将函数操作应用在输入流的元素中，并将返回值传递到输出流中。
+- `mapToInt(ToIntFunction)`：操作同上，但结果是 **IntStream**。
+- `mapToLong(ToLongFunction)`：操作同上，但结果是 **LongStream**。
+- `mapToDouble(ToDoubleFunction)`：操作同上，但结果是 **DoubleStream**。
+
+`map()` 可以产生和接收类型完全不同的类型，从而改变流的数据类型。下面代码示例：
+
+```java
+class Numbered {
+    final int n;
+    Numbered(int n) {
+        this.n = n;
+    }
+    @Override
+    public String toString() {
+        return "Numbered(" + n + ")";
+    }
+}
+class FunctionMap2 {
+    public static void main(String[] args) {
+        Stream.of(1, 5, 7, 9, 11, 13)
+                .map(Numbered::new)
+                .forEach(System.out::println);
+    }
+}
+```
+
+#### 在 flatMap() 中组合流
+
+假设我们现在有了一个传入的元素流，并且打算对流元素使用 `map()` 函数。假设有这么一个函数：**这个函数功能是产生一个流**。我们想要产生一个元素流，而实际却产生了一个元素流的流。
+
+> The flatMap() function is used to convert a Stream of list of values to just a Stream of values. This is also called flattening of stream.
+
+`flatMap()` 做了两件事：将产生流的函数应用在每个元素上（与 `map()` 所做的相同），然后将每个流都扁平化为元素，因而**最终产生的仅仅是包含元素的流，而不是包含元素流的流**。
+
+`flatMap(Function)`：当 `Function` 产生流时使用。
+
+`flatMapToInt(Function)`：当 `Function` 产生 `IntStream` 时使用。
+
+`flatMapToLong(Function)`：当 `Function` 产生 `LongStream` 时使用。
+
+`flatMapToDouble(Function)`：当 `Function` 产生 `DoubleStream` 时使用。
+
+```java
+class StreamOfStreams {
+    public static void main(String[] args) {
+        Stream.of(1, 2)
+            	//入参是一个元素 出参是一个 Stream 流
+                .map(i -> Stream.of("Gonzo", "Kermit"))
+                .forEach(System.out::println);
+        
+        Stream.of(1, 2)
+                .flatMap(i -> Stream.of("Gonzo", "Fozzie"))
+                .forEach(System.out::println);
+        /*
+        //打印的是流
+         java.util.stream.ReferencePipeline$Head@7ba4f24f
+		java.util.stream.ReferencePipeline$Head@3b9a45b3
+		//打印的是元素
+		Gonzo
+		Fozzie
+		Gonzo
+		Fozzie
+        */
+    }
+}
+```
+
+前面的 **FileToWordsRegexp.java**，它的问题是需要将整个文件读入行列表中 —— 显然需要存储该列表。而我们真正想要的是创建一个不需要中间存储层的单词流。
+
+```java
+public class FileToWords {
+    public static Stream<String> stream(String filePath) throws Exception {
+        return Files.lines(Paths.get(filePath))
+        .skip(1) // First (comment) line
+        .flatMap(line ->
+        Pattern.compile("\\W+").splitAsStream(line));
+        //或者这样生成流
+        //.flatMap(line -> Arrays.stream(line.split("\\W+")))
+    }
+}
+```
+
+**注意**：`\\W+` 是一个正则表达式。他表示“非单词字符”，`+` 表示“可以出现一次或者多次”。小写形式的 `\\w` 表示“单词字符”。
+
+我们只是想要一个简单的单词流时，在传入的行流（stream of lines）上调用 `map()` 会产生一个单词流的流。而 `flatMap()` 可以将元素流的流扁平化为一个简单的单词流。
+
+### Optional 类
+
+**Optional** 可以实现这样的功能。一些标准流操作返回 **Optional** 对象，因为它们并不能保证预期结果一定存在。包括：
+
+- `findFirst()` 返回一个包含第一个元素的 **Optional** 对象，如果流为空则返回 **Optional.empty**
+
+- `findAny()` 返回包含任意元素的 **Optional** 对象，如果流为空则返回 **Optional.empty**
+
+- `max()` 和 `min()` 返回一个包含最大值或者最小值的 **Optional** 对象，如果流为空则返回 **Optional.empty**
+
+  `reduce()` 不再以 `identity` 形式开头，而是将其返回值包装在 **Optional** 中。（`identity` 对象成为其他形式的 `reduce()` 的默认结果，因此不存在空结果的风险）
+
+对于数字流 **IntStream**、**LongStream** 和 **DoubleStream**，`average()` 会将结果包装在 **Optional** 以防止流为空。
+
+```java
+class OptionalBasics {
+    static void test(Optional<String> optString) {
+        if(optString.isPresent())
+            System.out.println(optString.get()); 
+        else
+            System.out.println("Nothing inside!");
+    }
+    public static void main(String[] args) {
+        test(Stream.of("Epithets").findFirst());
+        test(Stream.<String>empty().findFirst());
+    }
+    //Epithets
+    //Nothing inside!
+}
+```
+
+当你接收到 **Optional** 对象时，应首先调用 `isPresent()` 检查其中是否包含元素。如果存在，可使用 `get()` 获取。当流为空的时候你会获得一个 **Optional.empty** 对象，而不是抛出异常。**Optional** 拥有 `toString()` 方法可以用于展示有用信息。
+
+#### Optional 的便利函数
+
+有许多便利函数可以解包 **Optional** ，这简化了上述“对所包含的对象的检查和执行操作”的过程：
+
+- `ifPresent(Consumer)`：当值存在时调用 **Consumer**，否则什么也不做。
+- `orElse(otherObject)`：如果值存在则直接返回，否则返回 **otherObject**。
+- `orElseGet(Supplier)`：如果值存在则直接返回，否则使用 **Supplier** 函数生成一个对象。
+- `orElseThrow(Supplier)`：如果值存在直接返回，否则使用 **Supplier** 函数生成一个异常。
+
+#### 创建 Optional
+
+当需要使用 **Optional** 时，可以使用下面 3 个静态方法：
+
+- `empty()`：生成一个空 **Optional**。
+- `of(value)`：将一个非空值包装到 **Optional** 里。
+- `ofNullable(value)`：针对一个可能为空的值，为空时自动生成 **Optional.empty**，否则将值包装在 **Optional** 中。
+
+```java
+class CreatingOptionals {
+    static void test(String testName, Optional<String> opt) {
+        System.out.println(" === " + testName + " === ");
+        System.out.println(opt.orElse("Null"));
+    }
+    public static void main(String[] args) {
+        test("empty", Optional.empty());
+        test("of", Optional.of("Howdy"));
+        try {
+            test("of", Optional.of(null));
+        } catch(Exception e) {
+            System.out.println(e);
+        }
+        test("ofNullable", Optional.ofNullable("Hi"));
+        test("ofNullable", Optional.ofNullable(null));
+    }
+}
+```
+
+我们不能通过传递 `null` 到 `of()` 来创建 `Optional` 对象。最安全的方法是， 使用 `ofNullable()` 来优雅地处理 `null`。
+
+#### Optional 对象操作
+
+
+
+#### Optional 流
+
+
+
+### 终端操作
+
+
+
+#### 数组
+
+
+
+#### 循环
+
+
+
+#### 集合
+
+
+
+#### 组合
+
+
+
+#### 匹配
+
+
+
+#### 查找
+
+
+
+#### 信息
+
+
+
+#### 数字流信息
+
 
 

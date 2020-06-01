@@ -2607,7 +2607,7 @@ public class CurryingAndPartials {
 
 流方法预置的操作几乎已满足了我们平常所有的需求。流操作的类型有三种：创建流，修改流元素（中间操作， Intermediate Operations），消费流元素（终端操作， Terminal Operations）。最后一种类型通常意味着收集流元素（通常是到集合中）。
 
-### 流创建
+### 创建流
 
 #### Stream.of() 方法
 
@@ -2695,7 +2695,7 @@ public class RandomGenerators {
 
 #### Stream.generate() 方法
 
- Stream.`generate()` 需要传入一个 `Supplier<T>` 类型的参数。
+ Stream.generate() 需要传入一个 `Supplier<T>` 类型的参数。
 
 ```java
 public class Generator implements Supplier<String> {
@@ -2729,7 +2729,7 @@ public class Duplicator {
 
 #### Stream.iterate() 方法
 
-**Stream.**`iterate()` 以种子（第一个参数）开头，并将其传给方法（第二个参数）。方法的结果将添加到流，并存储作为第一个参数用于下次调用 `iterate()`，依次类推。我们可以利用 `iterate()` 生成一个斐波那契数列。代码示例：
+Stream.iterate() 以种子（第一个参数）开头，并将其传给方法（第二个参数）。方法的结果将添加到流，并存储作为第一个参数用于下次调用 `iterate()`，依次类推。我们可以利用 `iterate()` 生成一个斐波那契数列。代码示例：
 
 ```java
 public class Fibonacci {
@@ -2960,7 +2960,7 @@ class FunctionMap2 {
 
 #### 在 flatMap() 中组合流
 
-假设我们现在有了一个传入的元素流，并且打算对流元素使用 `map()` 函数。假设有这么一个函数：**这个函数功能是产生一个流**。我们想要产生一个元素流，而实际却产生了一个元素流的流。
+假设我们现在有了一个传入的元素流，并且打算对流元素使用 `map()` 函数。假设有这么一个函数：**这个函数功能是产生一个流**。我们想要产生一个元素的流，而实际却产生了一个元素流的流。
 
 > The flatMap() function is used to convert a Stream of list of values to just a Stream of values. This is also called flattening of stream.
 
@@ -3020,7 +3020,7 @@ public class FileToWords {
 
 ### Optional 类
 
-**Optional** 可以实现这样的功能。一些标准流操作返回 **Optional** 对象，因为它们并不能保证预期结果一定存在。包括：
+一些标准流操作返回 **Optional** 对象，因为它们并不能保证预期结果一定存在。包括：
 
 - `findFirst()` 返回一个包含第一个元素的 **Optional** 对象，如果流为空则返回 **Optional.empty**
 
@@ -3092,45 +3092,341 @@ class CreatingOptionals {
 
 #### Optional 对象操作
 
+当我们的流管道生成了 **Optional** 对象，下面 3 个方法可使得 **Optional** 的后续能做更多的操作：
 
+- `filter(Predicate)`：将 **Predicate** 应用于 **Optional** 中的内容并返回结果。当 **Optional** 不满足 **Predicate** 时返回空。如果 **Optional** 为空，则直接返回。
+- `map(Function)`：如果 **Optional** 不为空，应用 **Function** 于 **Optional** 中的 value，并返回使用 `Optional.ofNullable()` 包装的结果。否则直接返回 **Optional.empty**。
+- `flatMap(Function)`：同 `map()`，但是提供的映射函数将结果包装在 **Optional** 对象中，因此 `flatMap()` 不会在最后进行任何包装，而是直接返回函数的结果。
+
+以上方法都不适用于数值型 **Optional**。一般来说，流的 `filter()` 会在 **Predicate** 返回 `false` 时移除流元素。而 `Optional.filter()` 在失败时不会删除 **Optional**，而是返回 **Optional.empty** ，原来存在的对象依然存在。
 
 #### Optional 流
 
+假设你的生成器可能产生 `null` 值，那么当用它来创建流时，你会自然地想到用 **Optional** 来包装元素。
 
+```java
+class Signal {
+    private final String msg;
+
+    public Signal(String msg) {
+        this.msg = msg;
+    }
+
+    @Override
+    public String toString() {
+        return "Signal(" + msg + ")";
+    }
+
+    static Random rand = new Random(47);
+
+    public static Signal morse() {
+        switch (rand.nextInt(4)) {
+            case 1:
+                return new Signal("dot");
+            case 2:
+                return new Signal("dash");
+            default:
+                return null;
+        }
+    }
+
+    public static Stream<Optional<Signal>> stream() {
+        return Stream.generate(Signal::morse)
+                .map(Optional::ofNullable);
+    }
+}
+
+class StreamOfOptionals {
+    public static void main(String[] args) {
+        Signal.stream()
+                .limit(10)
+                .filter(Optional::isPresent)//过滤掉空的 Optional
+                .map(Optional::get) //取出 Signal 对象
+                .forEach(System.out::println);
+    }
+}
+```
 
 ### 终端操作
 
-
+终端操作将会获取流的最终结果。至此我们无法再继续往后传递流。终端操作总是我们在流管道中所做的最后一件事。
 
 #### 数组
 
+- `toArray()`：将流转换成适当类型的数组。
+- `toArray(generator)`：在特殊情况下，生成自定义类型的数组。
 
+假设我们需要复用流产生的随机数时，就可以这么使用。代码示例：
+
+```java
+public class RandInts {
+    static int[] rints = new Random(47).ints(0, 1000).limit(100).toArray();
+    public static IntStream rands() {
+        return Arrays.stream(rints);
+    }
+}
+```
 
 #### 循环
 
-
+- `forEach(Consumer)`：常见如 `System.out::println` 作为 **Consumer** 函数。
+- `forEachOrdered(Consumer)`： 和 `parallel()` 搭配才有意义，保证 `forEach` 按照原始流顺序操作。
 
 #### 集合
 
+- `collect(Collector)`：使用 **Collector** 收集流元素到结果集合中。
+- `collect(Supplier, BiConsumer, BiConsumer)`：同上，第一个参数 **Supplier** 创建了一个新结果集合，第二个参数 **BiConsumer** 将下一个元素包含到结果中，第三个参数 **BiConsumer** 用于将两个值组合起来。
 
+假设我们现在为了保证元素有序，将元素存储在 **TreeSet** 中。**Collectors** 里面没有特定的 `toTreeSet()`，但是我们可以通过将集合的构造函数引用传递给 `Collectors.toCollection()`，从而构建任何类型的集合。下面我们来将一个文件中的单词收集到 **TreeSet** 集合中。代码示例：
+
+```java
+public class TreeSetOfWords {
+    public static void
+    main(String[] args) throws Exception {
+        Set<String> words2 =
+                Files.lines(Paths.get("TreeSetOfWords.java"))
+                        .flatMap(s -> Arrays.stream(s.split("\\W+")))
+                        .filter(s -> !s.matches("\\d+")) // No numbers
+                        .map(String::trim)
+                        .filter(s -> s.length() > 2)
+                        .limit(100)
+                        .collect(Collectors.toCollection(TreeSet::new));
+        System.out.println(words2);
+    }
+}
+```
 
 #### 组合
 
+- `reduce(BinaryOperator)`：使用 **BinaryOperator** 来组合所有流中的元素。因为流可能为空，其返回值为 **Optional**。
+- `reduce(identity, BinaryOperator)`：功能同上，但是使用 **identity** 作为其组合的初始值。因此如果流为空，**identity** 就是结果。
+- `reduce(identity, BiFunction, BinaryOperator)`：更复杂的使用形式，这里把它包含在内，因为它可以提高效率。通常，我们可以显式地组合 `map()` 和 `reduce()` 来更简单的表达它。
 
+下面来看下 `reduce` 的代码示例：
+
+```java
+class Frobnitz {
+    int size;
+    Frobnitz(int sz) { size = sz; }
+    @Override
+    public String toString() {
+        return "Frobnitz(" + size + ")";
+    }
+    // Generator:
+    static Random rand = new Random(47);
+    static final int BOUND = 100;
+    static Frobnitz supply() {
+        return new Frobnitz(rand.nextInt(BOUND));
+    }
+}
+public class Reduce {
+    public static void main(String[] args) {
+        Stream.generate(Frobnitz::supply)
+                .limit(10)
+                .peek(System.out::println)
+                .reduce((fr0, fr1) -> fr0.size < 50 ? fr0 : fr1)
+                .ifPresent(System.out::println);
+    }
+}
+```
+
+无“初始值”的 `reduce()`方法返回值是 **Optional** 类型。`Optional.ifPresent()` 只有在结果非空的时候才会调用 `Consumer<Frobnitz>` 。
+
+Lambda 表达式中的第一个参数 `fr0` 是上一次调用 `reduce()` 的结果。而第二个参数 `fr1` 是从流传递过来的值。
+
+`reduce()` 中的 Lambda 表达式使用了三元表达式来获取结果，当其长度小于 50 的时候获取 `fr0` 否则获取序列中的下一个值 `fr1`。当取得第一个长度小于 50 的 `Frobnitz`，只要得到结果就会忽略其他。这是个非常奇怪的约束， 也确实让我们对 `reduce()` 有了更多的了解。
 
 #### 匹配
 
-
+- `allMatch(Predicate)` ：如果流的每个元素根据提供的 **Predicate** 都返回 true 时，结果返回为 true。在第一个 false 时，则停止执行计算。
+- `anyMatch(Predicate)`：如果流中的任意一个元素根据提供的 **Predicate** 返回 true 时，结果返回为 true。在第一个 false 是停止执行计算。
+- `noneMatch(Predicate)`：如果流的每个元素根据提供的 **Predicate** 都返回 false 时，结果返回为 true。在第一个 true 时停止执行计算。
 
 #### 查找
 
+- `findFirst()`：返回第一个流元素的 **Optional**，如果流为空返回 **Optional.empty**。
+- `findAny(`：返回含有任意流元素的 **Optional**，如果流为空返回 **Optional.empty**。
 
+```java
+public class LastElement {
+    public static void main(String[] args) {
+        OptionalInt last = IntStream.range(10, 20)
+            //选择流中最后一个元素，那就使用 reduce()
+                .reduce((n1, n2) -> n2);
+        System.out.println(last.orElse(-1));
+        
+        // Non-numeric object:
+        Optional<String> lastobj =
+                Stream.of("one", "two", "three")
+                        .reduce((n1, n2) -> n2);
+        System.out.println(
+                lastobj.orElse("Nothing there!"));
+    }
+}
+```
 
 #### 信息
 
+- `count()`：流中的元素个数。
+- `max(Comparator)`：根据所传入的 **Comparator** 所决定的“最大”元素。
+- `min(Comparator)`：根据所传入的 **Comparator** 所决定的“最小”元素。
 
+**String** 类型有预设的 **Comparator** 实现。代码示例：
+
+```java
+public class Informational {
+    public static void
+    main(String[] args) throws Exception {
+        System.out.println(
+                FileToWords.stream("Cheese.dat").count());
+        
+        System.out.println(
+                FileToWords.stream("Cheese.dat")
+                        .min(String.CASE_INSENSITIVE_ORDER)
+                        .orElse("NONE"));
+}
+```
+
+`min()` 和 `max()` 的返回类型为 **Optional**，这需要我们使用 `orElse()`来解包。
 
 #### 数字流信息
+
+- `average()` ：求取流元素平均值。
+- `max()` 和 `min()`：数值流操作无需 **Comparator**。
+- `sum()`：对所有流元素进行求和。
+- `summaryStatistics()`：生成可能有用的数据。目前并不太清楚这个方法存在的必要性，因为我们其实可以用更直接的方法获得需要的数据。
+
+
+
+## 异常 ##
+
+
+
+### 异常概念 ###
+
+
+
+### 基本异常 ###
+
+
+
+#### 异常参数 ####
+
+
+
+### 异常捕获 ###
+
+
+
+#### try 语句块 ####
+
+
+
+#### 异常处理程序 ####
+
+
+
+#### 终止与恢复 ####
+
+
+
+### 自定义异常 ###
+
+
+
+#### 异常和记录日志 ####
+
+
+
+### 异常声明 ###
+
+
+
+### 捕获所有异常 ###
+
+
+
+#### 多重捕获 ####
+
+
+
+#### 栈轨迹 ####
+
+
+
+#### 重新抛出异常 ####
+
+
+
+#### 精准重抛出异常 ####
+
+
+
+#### 异常链 ####
+
+
+
+### Java 标准异常 ###
+
+
+
+#### RuntimeException ####
+
+
+
+### 使用 finally 进行清理 ###
+
+
+
+#### finally 用来做什么 ####
+
+
+
+#### 在 return 中使用 finally ####
+
+
+
+#### 异常丢失 ####
+
+
+
+### 异常限制 ###
+
+
+
+### 构造器 ###
+
+
+
+### Try-With-Resources ###
+
+
+
+#### 揭示细节 ####
+
+
+
+### 异常匹配 ###
+
+
+
+### 其他可选方式 ###
+
+
+
+#### 历史 ####
+
+
+
+#### 观点 ####
+
+
+
+#### 把异常传递给控制台 ####
+
+
+
+### 异常指南 ###
 
 
 

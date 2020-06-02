@@ -3300,133 +3300,321 @@ public class Informational {
 
 ## 异常 ##
 
+Java 的基本理念是“**结构不佳的代码不能运行**”。发现错误的理想时机是在**编译阶段**，但是它并不能找出所有的错误，余下的问题必须在运行期间解决（使用异常机制）。
 
-
-### 异常概念 ###
-
-
+异常往往能降低错误处理代码的复杂度。如果不使用异常，那么就必须检查特定的错误，并在程序中的许多地方去处理它。异常机制保证能够捕获错误，只需在一个地方处理错误，即异常处理程序。这种方式不仅节省代码，而且**把“描述在正常执行过程中做什么事”的代码和“出了问题怎么办”的代码相分离。**
 
 ### 基本异常 ###
 
+异常情形（exceptional condition）是指阻止当前方法或作用域继续执行的问题。普通问题是指，在当前环境下能得到足够的信息，总能处理这个错误。而对于异常情形，就不能继续下去了，因为在当前环境下无法获得必要的信息来解决问题。你所能做的就是从当前环境跳出，并且把问题提交给上一级环境。这就是抛出异常时所发生的事情。
 
+当抛出异常后，同 Java 中其他对象的创建一样，将使用 new 在堆上创建异常对象。然后，当前的执行路径被终止，并且从当前环境中弹出对异常对象的引用。此时，异常处理机制接管程序，并开始寻找一个恰当的地方来继续执行程序。这个恰当的地方就是异常处理程序，它的任务是将程序从错误状态中恢复，以使程序能要么换一种方式运行，要么继续运行下去。
 
 #### 异常参数 ####
 
+与使用 Java 中的其他对象一样，我们总是用 new 在堆上创建异常对象，这也伴随着存储空间的分配和构造器的调用。所有标准异常类都有两个构造器：一个是无参构造器；另一个是接受字符串作为参数，以便能把相关信息放入异常对象的构造器：
 
+```java
+throw new NullPointerException("t = null");
+```
+
+在使用 **new** 创建了异常对象之后，此对象的引用将传给 **throw**。此外，能够抛出任意类型的 **Throwable** 对象，它是异常类型的根类。通常，对于不同类型的错误，要抛出相应的异常。错误信息可以保存在异常对象内部或者用异常类的名称来暗示。
 
 ### 异常捕获 ###
 
-
+监控区域（guarded region）是一段可能产生异常的代码，并且后面跟着处理这些异常的代码。
 
 #### try 语句块 ####
 
+如果在方法内部抛出了异常（或者在方法内部调用的其他方法抛出了异常），这个方法将在抛出异常的过程中结束。要是不希望方法就此结束，可以在方法内设置 try 块：
 
+```java
+try {
+    // Code that might generate exceptions
+}
+```
 
 #### 异常处理程序 ####
 
+抛出的异常必须在某处得到处理。这个“地点”就是异常处理程序，而且针对每个要捕获的异常，得准备相应的处理程序。异常处理程序紧跟在 try 块之后，以关键字 catch 表示：
 
+```java
+try {
+    // Code that might generate exceptions
+} catch(Type1 id1) {
+    // Handle exceptions of Type1
+} catch(Type2 id2) {
+    // Handle exceptions of Type2
+}
+```
 
-#### 终止与恢复 ####
-
-
+注意，只有匹配的 catch 子句才能得到执行；这与 switch 语句不同，switch 语句需要在每一个 case 后面跟一个 break，以避免执行后续的 case 子句。
 
 ### 自定义异常 ###
 
+对异常来说，最重要的部分是**异常的名字**。定义异常类，必须从已有的异常类继承，最好是选择意思相近的异常类继承。建立新的异常类型最简单的方法就是让编译器为你产生无参构造器。对于异常类来说，getMessage() 方法有点类似于 toString() 方法。
 
+```java
+class SimpleException extends Exception {
+     SimpleException() {}
+     SimpleException(String msg) { super(msg); }
+}
 
-#### 异常和记录日志 ####
-
-
+public class InheritingExceptions {
+    public void f() throws SimpleException {
+        System.out.println(
+                "Throw SimpleException from f()");
+        throw new SimpleException();
+    }
+    public static void main(String[] args) {
+        InheritingExceptions sed =
+                new InheritingExceptions();
+        try {
+            sed.f();
+        } catch(SimpleException e) {
+            System.out.println("Caught it!");
+        }
+    }
+}
+```
 
 ### 异常声明 ###
 
+方法异常声明使用关键字 **throws**，后面接一个所有潜在异常类型的列表，所以方法定义可能看起来像这样：
 
+```java
+void f() throws TooBigException, DivZeroException { }
+```
+
+但是，要是这样写：
+
+```java
+void f() { }
+```
+
+就表示此方法不会抛出任何异常（除了从 **RuntimeException** 继承的异常，它们可以在没有异常说明的情况下被抛出）。
+
+代码必须与异常说明保持一致。如果方法里的代码产生了异常却没有进行处理，编译器会发现这个问题并提醒你：要么处理这个异常，要么就在异常说明中表明此方法将产生异常。
+
+**这种在编译时被强制检查的异常称为被检查的异常。**
 
 ### 捕获所有异常 ###
 
+可以只写一个异常处理程序来捕获所有类型的异常。通过捕获编程行为相关的的基类 Exception：
 
+```java
+catch(Exception e) {
+    System.out.println("Caught an exception");
+}
+```
+
+打印 Throwable 的调用栈轨迹。调用栈显示了“把你带到异常抛出地点”的方法调用序列。其中第一个版本输出到标准错误，后两个版本允许选择要输出的流。
+
+```java
+void printStackTrace()
+void printStackTrace(PrintStream)
+void printStackTrace(PrintWriter)
+```
+
+下面的例子演示了如何使用 Exception 类型的方法：
+
+```java
+public class ExceptionMethods {
+    public static void main(String[] args) {
+        try {
+            throw new Exception("My Exception");
+        } catch(Exception e) {
+            System.out.println("Caught Exception");
+            System.out.println(
+                    "getMessage():" + e.getMessage());
+            System.out.println("getLocalizedMessage():" +
+                    e.getLocalizedMessage());
+            System.out.println("toString():" + e);
+            System.out.println("printStackTrace():");
+            e.printStackTrace(System.out);
+        }
+    }
+}
+```
 
 #### 多重捕获 ####
 
+Java 7 提供了多重捕获机制，使用“或”将不同类型的异常组合起来，只需要一行 catch 语句：
 
+```java
+ try {
+	// ...
+  } catch(Except1 | Except2 | Except3 | Except4 e) {
+  
+  }
+```
 
 #### 栈轨迹 ####
 
-
+`printStackTrace()` 方法所提供的信息可以通过 `getStackTrace()` 方法来直接访问，这个方法将返回一个由栈轨迹中的元素所构成的数组，其中每一个元素都表示栈中的一桢。元素 0 是栈顶元素，并且是调用序列中的最后一个方法调用（这个 `Throwable` 被创建和抛出之处）。数组中的最后一个元素和栈底是调用序列中的第一个方法调用。
 
 #### 重新抛出异常 ####
 
+把刚捕获的异常重新抛出：
 
+```java
+catch(Exception e) {
+    System.out.println("An exception was thrown");
+    throw e;
+}
+```
 
-#### 精准重抛出异常 ####
-
-
+如果只是把当前异常对象重新抛出，那么 `printStackTrace()` 方法显示的将是原来异常抛出点的调用栈信息，而并非重新抛出点的信息。要想更新这个信息，可以调用 `fillInStackTrace()` 方法，这将返回一个 Throwable 对象，调用 `fillInStackTrace()` 的那一行就成了异常的新发生地了。
 
 #### 异常链 ####
 
+捕获一个异常后抛出另一个异常，并且希望把原始异常的信息保存下来，这被称为**异常链**。现在所有 **Throwable** 的子类在构造器中都可以接受一个 cause 对象作为参数。这个 cause 就用来表示原始异常，这样通过把原始异常传递给新的异常，使得即使在当前位置创建并抛出了新的异常，也能通过这个异常链追踪到异常最初发生的位置。
 
+在 Throwable 的子类中，只有三种基本的异常类提供了带 cause 参数的构造器。它们是 Error、Exception 以及 RuntimeException。如果要把其他类型的异常链接起来，应该使用 `initCause()` 方法而不是构造器。
 
 ### Java 标准异常 ###
 
+Throwable 表示任何可以作为异常被抛出的类。Throwable 对象可分为两种类型：
 
+- **Error** 用来表示编译时和系统错误（一般不用关心）；
+- **Exception** 是可以被抛出的基本类型，在 Java 类库、用户方法以及运行时故障中都可能抛出 Exception 型异常。所以 Java 程序员关心的基类型通常是 Exception。
+
+异常的基本的概念是用名称代表发生的问题，这些异常可以通过它们的完整名称或者从它们的父类中看出端倪。比如，所有的输入/输出异常都是从 java.io.IOException 继承而来的。
 
 #### RuntimeException ####
 
+运行时异常会自动被 java 虚拟机抛出，这些异常都是从 RuntimeException 类继承而来。它们也被称为“不受检查异常”。**不需要在声明方法时抛出 RuntimeException 类型的异常。**
 
+RuntimeException 代表的是编程错误：
 
-### 使用 finally 进行清理 ###
+1. 无法预料的错误。比如从你控制范围之外传递进来的 null 引用。
+2. 作为程序员，应该在代码中进行检查的错误。
 
+如果 RuntimeException 没有被捕获而直达 main()，那么在程序退出前将调用异常的 printStackTrace() 方法。
 
+### finally 代码块 ###
 
-#### finally 用来做什么 ####
+有一些代码片段，可能会希望无论 try 块中的异常是否抛出，它们都能得到执行。这通常适用于内存回收之外的情况，可以在异常处理程序后面加上 finally 子句， **finally 代码块总能运行**（在 return 之前执行）。完整的异常处理程序看起来像这样：
 
+```java
+try {
+// The guarded region: Dangerous activities
+// that might throw A or B
+} catch(A a1) {
+// Handler for situation A
+} catch(B b1) {
+// Handler for situation B
+} finally {
+// Activities that happen every time
+}
+```
 
+**finally 用来做什么？**
 
-#### 在 return 中使用 finally ####
-
-
-
-#### 异常丢失 ####
-
-
+当要把除内存之外的资源恢复到它们的初始状态时，就要用到 finally 子句。这种需要清理的资源包括：已经打开的文件或网络连接，在屏幕上画的图形，甚至可以是外部世界的某个开关。
 
 ### 异常限制 ###
 
-
-
-### 构造器 ###
-
-
+当覆盖方法的时候，只能抛出在基类方法的异常说明里列出的那些异常。
 
 ### Try-With-Resources ###
 
+Java 7 引入了 try-with-resources 语法，括号内的部分称为资源规范头（resource specification header），在括号内创建的对象必须实现 **AutoCloseable** 接口，实现方式是编译时将资源放到 finally 块关闭。Java 5 中的 **Closeable** 已经被修改，修改之后的接口继承了 AutoCloseable 接口。
 
+```java
+class Reporter implements AutoCloseable {
+    String name = getClass().getSimpleName();
+    Reporter() {
+        System.out.println("Creating " + name);
+    }
+    public void close() {
+        System.out.println("Closing " + name);
+    }
+}
+class First extends Reporter {}
+class Second extends Reporter {}
+public class AutoCloseableDetails {
+    public static void main(String[] args) {
+        try(
+                First f = new First();
+                Second s = new Second()
+        ) {
+        }
+    }
+}
+//Creating First
+//Creating Second
+//Closing Second
+//Closing First
+```
 
-#### 揭示细节 ####
-
-
+退出 try 块会调用两个对象的 close() 方法，并以与创建顺序相反的顺序关闭它们。顺序很重要，因为在此配置中，Second 对象可能依赖于 First 对象，因此如果 First 在第 Second 关闭时已经关闭。 Second 的 close() 方法可能会尝试访问 First 中不再可用的某些功能。
 
 ### 异常匹配 ###
 
+抛出异常的时候，异常处理系统会按照代码的书写顺序找出“最近”的处理程序。找到匹配的处理程序之后，它就认为异常将得到处理，然后就不再继续查找。
 
+查找的时候并不要求抛出的异常同处理程序所声明的异常完全匹配。派生类的对象也可以匹配其基类的处理程序，就像这样：
 
-### 其他可选方式 ###
+```java
+class Annoyance extends Exception {}
+class Sneeze extends Annoyance {}
+public class Human {
+    public static void main(String[] args) {
+        // Catch the exact type:
+        try {
+            throw new Sneeze();
+        } catch(Sneeze s) {
+            System.out.println("Caught Sneeze");
+        } catch(Annoyance a) {
+            System.out.println("Caught Annoyance");
+        }
+        // Catch the base type:
+        try {
+            throw new Sneeze();
+        } catch(Annoyance a) {
+            System.out.println("Caught Annoyance");
+        }
+    }
+}
+//Caught Sneeze
+//Caught Annoyance
+```
 
+### checked 异常转换为 unchecked 异常 ###
 
+当在一个普通方法里调用别的方法时，要考虑到“我不知道该这样处理这个异常，但是也不想把它‘吞’了，或者打印一些无用的消息”。异常链提供了一种新的思路来解决这个问题。可以直接把“被检查的异常”包装进 RuntimeException 里面，就像这样：
 
-#### 历史 ####
+```java
+try {
+    // ... to do something useful
+} catch(IDontKnowWhatToDoWithThisCheckedException e) {
+    throw new RuntimeException(e);
+}
+```
 
-
+如果想把“被检查的异常”这种功能“屏蔽”掉的话，这看上去像是一个好办法。不用“吞下”异常，也不必把它放到方法的异常说明里面，而异常链还能保证你不会丢失任何原始异常的信息。
 
 #### 观点 ####
 
+Java 的“被检查的异常”为人诟病。
 
+>  好的程序设计语言能帮助程序员写出好程序，但无论哪种语言都避免不了程序员用它写出坏程序。
 
-#### 把异常传递给控制台 ####
+### 异常使用指南 ###
 
+1. 尽可能使用 try-with-resource。
+2. 在恰当的级别处理问题。（在知道该如何处理的情况下才捕获异常。）
+3. 解决问题并且重新调用产生异常的方法。
+4. 进行少许修补，然后绕过异常发生的地方继续执行。
+5. 用别的数据进行计算，以代替方法预计会返回的值。
+6. 把当前运行环境下能做的事情尽量做完，然后把相同的异常重抛到更高层。
+7. 把当前运行环境下能做的事情尽量做完，然后把不同的异常抛到更高层。
+8. 终止程序。
+9. 进行简化。（如果你的异常模式使问题变得太复杂，那用起来会非常痛苦也很烦人。）
+10. 让类库和程序更安全。（这既是在为调试做短期投资，也是在为程序的健壮性做长期投资。）
 
+异常处理的一个重要原则是“只有在你知道如何处理的情况下才捕获异常"。实际上，异常处理的一个重要目标就是把错误处理的代码同错误发生的地点相分离。
 
-### 异常指南 ###
-
-
+异常处理的优点之一就是它使得你可以在某处集中精力处理你要解决的问题，而在另一处处理你编写的这段代码中产生的错误。
 

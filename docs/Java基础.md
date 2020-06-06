@@ -4065,9 +4065,6 @@ public class Writing {
 `Files.lines()` 方便地将文件转换为行的 `Stream`：
 
 ```java
-// files/ReadLineStream.java
-import java.nio.file.*;
-
 public class ReadLineStream {
     public static void main(String[] args) throws Exception {
         Files.lines(Paths.get("PathInfo.java"))
@@ -4078,7 +4075,7 @@ public class ReadLineStream {
 }
 /* Output:
     show("RegularFile", Files.isRegularFile(p));
-*/复制ErrorOK!
+*/
 ```
 
 这对本章中第一个示例代码做了流式处理，跳过 13 行，然后选择下一行并将其打印出来。
@@ -4104,4 +4101,391 @@ public class StreamInAndOut {
 ```
 
 因为我们在同一个块中执行所有操作，所以这两个文件都可以在相同的 try-with-resources 语句中打开。`PrintWriter` 是一个旧式的 `java.io` 类，允许你“打印”到一个文件，所以它是这个应用的理想选择。如果你看一下 `StreamInAndOut.txt`，你会发现它里面的内容确实是大写的。
+
+
+
+## 字符串 ##
+
+### 不可变类 ###
+
+#### Java 中的不可变类 ####
+
+**不可变是指该类的实例不可变而非指向该实例的引用的不可变**：
+
+不可变类（Immutable Objects）：当类的实例一经创建，其内容便不可改变，即无法修改其成员变量。
+
+可变类（Mutable Objects）：类的实例创建后，可以修改其内容。
+
+Java 中八个基本类型的包装类和 String 类都属于不可变类，而其他的大多数类都属于可变类。
+
+#### 不可变类是如何实现的 ####
+
+immutable 对象的状态在创建之后就不能发生改变，任何对它的改变都应该产生一个新的对象。
+
+因此，一个不可变类的定义应当具备以下特征：
+
+1. 所有成员都是 private final 的
+2. 不提供对成员的改变方法，例如：setXXXX
+3. 确保所有的方法不会被重载。手段有两种：使用final Class(强不可变类)，或者将所有类方法加上final(弱不可变类)。
+4. 如果某一个类成员不是基本类型（primitive type）或不可变类，必须通过在成员初始化或者 getter 方法时通过深度拷贝（即复制一个该类的新实例而非引用）方法，来确保类的不可变。
+5. 如果有必要，重写 hashCode() 和 equals() 方法，同时应保证两个用 equals() 方法判断为相等的对象，其 hashCode() 也应相等。
+
+### `+` 的重载与 StringBuilder ###
+
+`String` 对象是不可变的，你可以给一个 `String` 对象添加任意多的别名。因为 `String` 是只读的，所以指向它的任何引用都不可能修改它的值，因此，也就不会影响到其他引用。
+
+不可变性会带来一定的效率问题。为 `String` 对象重载的 `+` 操作符就是一个例子。重载的意思是，一个操作符在用于特定的类时，被赋予了特殊的意义（用于 `String` 的 `+` 与 `+=` 是 Java 中仅有的两个重载过的操作符）。
+
+操作符 `+` 可以用来连接 `String`：
+
+```java
+public class Concatenation {
+    public static void main(String[] args) { 
+        String mango = "mango"; 
+        String s = "abc" + mango + "def" + 47; 
+        System.out.println(s);
+    } 
+}
+```
+
+可以想象一下，这段代码是这样工作的：`String` 可能有一个 `append()` 方法，它会生成一个新的 `String` 对象，以包含 “abc” 与 `mango` 连接后的字符串。该对象会再创建另一个新的 `String` 对象，然后与 “def” 相连，生成另一个新的对象，依此类推。这种方式当然是可行的，但是为了生成最终的 `String` 对象，会产生一大堆需要垃圾回收的中间对象。
+
+那么实际是如何工作的呢？用 JDK 自带的 `javap` 工具来反编译以上代码。命令如下：
+
+```java
+javap -c Concatenation
+```
+
+这里的 `-c` 标志表示将生成 JVM 字节码。我们剔除不感兴趣的部分，然后做细微的修改，于是有了以下的字节码：
+
+```x86asm
+public static void main(java.lang.String[]); 
+ Code:
+  Stack=2, Locals=3, Args_size=1
+  0: ldc #2; //String mango 
+  2: astore_1 
+  3: new #3; //class StringBuilder 
+  6: dup 
+  7: invokespecial #4; //StringBuilder."<init>":() 
+  10: ldc #5; //String abc 
+  12: invokevirtual #6; //StringBuilder.append:(String) 
+  15: aload_1 
+  16: invokevirtual #6; //StringBuilder.append:(String) 
+  19: ldc #7; //String def 
+  21: invokevirtual #6; //StringBuilder.append:(String) 
+  24: bipush 47 
+  26: invokevirtual #8; //StringBuilder.append:(I) 
+  29: invokevirtual #9; //StringBuilder.toString:() 
+  32: astore_2 
+  33: getstatic #10; //Field System.out:PrintStream;
+  36: aload_2 
+  37: invokevirtual #11; //PrintStream.println:(String) 
+  40: return
+```
+
+需要重点注意的是：编译器自动引入了 `java.lang.StringBuilder` 类。虽然源代码中并没有使用 `StringBuilder` 类，但是编译器却自作主张地使用了它，就因为它更高效。
+
+在这里，编译器创建了一个 `StringBuilder` 对象，用于构建最终的 `String`，并对每个字符串调用了一次 `append()` 方法，共计 4 次。最后调用 `toString()` 生成结果，并存为 `s` (使用的命令为 `astore_2`)。
+
+现在，也许你会觉得可以随意使用 `String` 对象，反正编译器会自动为你做性能优化。可是在这之前，让我们更深入地看看编译器能为我们优化到什么程度。下面的例子采用两种方式生成一个 `String`：方法一使用了多个 `String` 对象；方法二在代码中使用了 `StringBuilder`。
+
+```java
+public class WhitherStringBuilder { 
+    public String implicit(String[] fields) { 
+        String result = ""; 
+        for(String field : fields) { 
+            result += field;
+        }
+        return result; 
+    }
+    public String explicit(String[] fields) { 
+        StringBuilder result = new StringBuilder(); 
+        for(String field : fields) { 
+            result.append(field); 
+        } 
+        return result.toString(); 
+    }
+}
+```
+
+现在运行 `javap -c WitherStringBuilder`，可以看到两种不同方法（我已经去掉不相关的细节）对应的字节码。首先是 `implicit()` 方法：
+
+```x86asm
+public java.lang.String implicit(java.lang.String[]); 
+0: ldc #2 // String 
+2: astore_2
+3: aload_1 
+4: astore_3 
+5: aload_3 
+6: arraylength 
+7: istore 4 
+9: iconst_0 
+10: istore 5 
+12: iload 5 
+14: iload 4 
+16: if_icmpge 51 
+19: aload_3 
+20: iload 5 
+22: aaload 
+23: astore 6 
+25: new #3 // StringBuilder 
+28: dup 
+29: invokespecial #4 // StringBuilder."<init>"
+32: aload_2 
+33: invokevirtual #5 // StringBuilder.append:(String) 
+36: aload 6 
+38: invokevirtual #5 // StringBuilder.append:(String;) 
+41: invokevirtual #6 // StringBuilder.toString:() 
+44: astore_2 
+45: iinc 5, 1 
+48: goto 12 
+51: aload_2 
+52: areturn
+```
+
+注意从第 16 行到第 48 行构成了一个循环体。第 16 行：对堆栈中的操作数进行“大于或等于的整数比较运算”，循环结束时跳转到第 51 行。第 48 行：重新回到循环体的起始位置（第 12 行）。注意：`StringBuilder` 是在循环内构造的，这意味着每进行一次循环，会创建一个新的 `StringBuilder` 对象。
+
+下面是 `explicit()` 方法对应的字节码：
+
+```x86asm
+public java.lang.String explicit(java.lang.String[]); 
+0: new #3 // StringBuilder 
+3: dup
+4: invokespecial #4 // StringBuilder."<init>" 
+7: astore_2 
+8: aload_1 
+9: astore_3 
+10: aload_3 
+11: arraylength 
+12: istore 4 
+14: iconst_0 
+15: istore 5 
+17: iload 5 
+19: iload 4 
+21: if_icmpge 43 
+24: aload_3 
+25: iload 5 
+27: aaload 
+28: astore 6 
+30: aload_2 
+31: aload 6 
+33: invokevirtual #5 // StringBuilder.append:(String) 
+36: pop
+37: iinc 5, 1 
+40: goto 17 
+43: aload_2 
+44: invokevirtual #6 // StringBuilder.toString:() 
+47: areturn
+```
+
+可以看到，不仅循环部分的代码更简短、更简单，而且它只生成了一个 `StringBuilder` 对象。显式地创建 `StringBuilder` 还允许你预先为其指定大小。如果你已经知道最终字符串的大概长度，那预先指定 `StringBuilder` 的大小可以避免频繁地重新分配缓冲。
+
+因此，当你为一个类编写 `toString()` 方法时，如果字符串操作比较简单，那就可以信赖编译器，它会为你合理地构造最终的字符串结果。但是，如果你要在 `toString()` 方法中使用循环，且可能有性能问题，那么最好自己创建一个 `StringBuilder` 对象，用它来构建最终结果。请参考以下示例：
+
+```java
+public class UsingStringBuilder { 
+    public static String string1() { 
+        Random rand = new Random(47);
+        StringBuilder result = new StringBuilder("["); 
+        for(int i = 0; i < 25; i++) { 
+            result.append(rand.nextInt(100)); 
+            result.append(", "); 
+        } 
+        result.delete(result.length()-2, result.length()); 
+        result.append("]");
+        return result.toString(); 
+    } 
+    public static String string2() { 
+        String result = new Random(47)
+            .ints(25, 0, 100)
+            .mapToObj(Integer::toString)
+            .collect(Collectors.joining(", "));
+        return "[" + result + "]"; 
+    } 
+    public static void main(String[] args) { 
+        System.out.println(string1()); 
+        System.out.println(string2()); 
+    }
+} 
+/* Output: 
+[58, 55, 93, 61, 61, 29, 68, 0, 22, 7, 88, 28, 51, 89, 
+9, 78, 98, 61, 20, 58, 16, 40, 11, 22, 4] 
+[58, 55, 93, 61, 61, 29, 68, 0, 22, 7, 88, 28, 51, 89,
+9, 78, 98, 61, 20, 58, 16, 40, 11, 22, 4] 
+*/ 
+```
+
+在方法 `string1()` 中，最终结果是用 `append()` 语句拼接起来的。如果你想走捷径，例如：`append(a + ": " + c)`，编译器就会掉入陷阱，从而为你另外创建一个 `StringBuilder` 对象处理括号内的字符串操作。如果拿不准该用哪种方式，随时可以用 `javap` 来分析你的程序。
+
+`StringBuilder` 提供了丰富而全面的方法，包括 `insert()`、`replace()`、`substring()`，甚至还有`reverse()`，但是最常用的还是 `append()` 和 `toString()`。还有 `delete()`，上面的例子中我们用它删除最后一个逗号和空格，以便添加右括号。
+
+`string2()` 使用了 `Stream`，这样代码更加简洁美观。可以证明，`Collectors.joining()` 内部也是使用的 `StringBuilder`，这种写法不会影响性能！
+
+`StringBuilder`是 Java SE5 引入的，在这之前用的是 `StringBuffer`。后者是线程安全的，因此开销也会大些。使用 `StringBuilder` 进行字符串操作更快一点。
+
+### 意外递归 ###
+
+Java 中的每个类从根本上都是继承自 `Object`，标准集合类也是如此，它们都有 `toString()` 方法，并且覆盖了该方法，使得它生成的 `String` 结果能够表达集合自身，以及集合包含的对象。例如 `ArrayList.toString()`，它会遍历 `ArrayList` 中包含的所有对象，调用每个元素上的 `toString()` 方法。
+
+如果你希望 `toString()` 打印出类的内存地址，也许你会考虑使用 `this` 关键字：
+
+```java
+public class InfiniteRecursion { 
+    @Override 
+    public String toString() { 
+        return " InfiniteRecursion address: " + this;
+    } 
+    public static void main(String[] args) { 
+        Stream.generate(InfiniteRecursion::new) 
+            .limit(10) 
+            .forEach(System.out::println); 
+    } 
+} 
+```
+
+当运行到如下代码时：
+
+```java
+"InfiniteRecursion address: " + this;
+```
+
+这里发生了自动类型转换，由 `InfiniteRecursion` 类型转换为 `String` 类型。因为编译器发现一个 `String` 对象后面跟着一个 “+”，而 “+” 后面的对象不是 `String`，于是编译器试着将 `this` 转换成一个 `String`。它怎么转换呢？正是通过调用 `this` 上的 `toString()` 方法，于是就发生了递归调用。
+
+如果你真的想要打印对象的内存地址，应该调用 `Object.toString()` 方法，这才是负责此任务的方法。所以，不要使用 `this`，而是应该调用 `super.toString()` 方法。
+
+### 字符串操作 ###
+
+以下是 `String` 对象具备的一些基本方法。重载的方法归纳在同一行中：
+
+| 方法                                        | 参数，重载版本                                               | 作用                                                         |
+| ------------------------------------------- | :----------------------------------------------------------- | ------------------------------------------------------------ |
+| 构造方法                                    | 默认版本，<br/>`String`，<br/>`StringBuilder`，<br/>`StringBuffer`，<br/>`char`数组，<br/>`byte`数组 | 创建`String`对象                                             |
+| `length()`                                  |                                                              | `String`中字符的个数                                         |
+| `charAt()`                                  | `int`索引                                                    | 获取`String`中索引位置上的`char`                             |
+| `getChars()`，<br/>`getBytes()`             | 待复制部分的开始和结束索引，复制的目标数组，目标数组的开始索引 | 复制`char`或`byte`到一个目标数组中                           |
+| `toCharArray()`                             |                                                              | 生成一个`char[]`，包含`String`中的所有字符                   |
+| `equals()`，<br/>`equalsIgnoreCase()`       | 与之进行比较的`String`                                       | 比较两个`String`的内容是否相同。如果相同，结果为`true`       |
+| `compareTo()`，<br/>`compareToIgnoreCase()` | 与之进行比较的`String`                                       | 按词典顺序比较`String`的内容，比较结果为负数、零或正数。注意，大小写不等价 |
+| `contains()`                                | 要搜索的`CharSequence`                                       | 如果该`String`对象包含参数的内容，则返回`true`               |
+| `contentEquals()`                           | 与之进行比较的<br/>`CharSequence`<br/>或`StringBuffer`       | 如果该`String`对象与参数的内容完全一致，则返回`true`         |
+| `isEmpty()`                                 |                                                              | 返回`boolean`结果，以表明`String`对象的长度是否为0           |
+| `regionMatches()`                           | 该`String`的索引偏移量，另一个`String`及其索引偏移量，要比较的长度。重载版本增加了“忽略大小写”功能 | 返回`boolean`结果，以表明所比较区域是否相等                  |
+| `startsWith()`                              | 可能的起始`String`。重载版本在参数中增加了偏移量             | 返回`boolean`结果，以表明该`String`是否以传入参数开始        |
+| `endsWith()`                                | 该`String`可能的后缀`String`                                 | 返回`boolean`结果，以表明此参数是否是该字符串的后缀          |
+| `indexOf()`，<br/>`lastIndexOf()`           | 重载版本包括：`char`，`char`与起始索引，`String`，`String`与起始索引 | 如果该`String`并不包含此参数，就返回-1；否则返回此参数在`String`中的起始索引。`lastIndexOf`()是从后往前搜索 |
+| `matches()`                                 | 一个正则表达式                                               | 返回`boolean`结果，以表明该`String`和给出的正则表达式是否匹配 |
+| `split()`                                   | 一个正则表达式。可选参数为需要拆分的最大数量                 | 按照正则表达式拆分`String`，返回一个结果数组                 |
+| `join()`（Java8引入的）                     | 分隔符，待拼字符序列。用分隔符将字符序列拼接成一个新的`String` | 用分隔符拼接字符片段，产生一个新的`String`                   |
+| `substring()`<br/>（即`subSequence()`）     | 重载版本：起始索引；起始索引+终止索引                        | 返回一个新的`String`对象，以包含参数指定的子串               |
+| `concat()`                                  | 要连接的`String`                                             | 返回一个新的`String`对象，内容为原始`String`连接上参数`String` |
+| `replace()`                                 | 要替换的字符，用来进行替换的新字符。也可以用一个`CharSequence`替换另一个`CharSequence` | 返回替换字符后的新`String`对象。如果没有替换发生，则返回原始的`String`对象 |
+| `replaceFirst()`                            | 要替换的正则表达式，用来进行替换的`String`                   | 返回替换首个目标字符串后的`String`对象                       |
+| `replaceAll()`                              | 要替换的正则表达式，用来进行替换的`String`                   | 返回替换所有目标字符串后的`String`对象                       |
+| `toLowerCase()`，<br/>`toUpperCase()`       |                                                              | 将字符的大小写改变后，返回一个新的`String`对象。如果没有任何改变，则返回原始的`String`对象 |
+| `trim()`                                    |                                                              | 将`String`两端的空白符删除后，返回一个新的`String`对象。如果没有任何改变，则返回原始的`String`对象 |
+| `valueOf()`<br/>（`static`）                | 重载版本：`Object`；<br/>`char[]`；`char[]`，<br/>偏移量，与字符个数；<br/>`boolean`；`char`；<br/>`int`；`long`；<br/>`float`；`double` | 返回一个表示参数内容的`String`                               |
+| `intern()`                                  |                                                              | 为每个唯一的字符序列生成一个且仅生成一个`String`引用         |
+| `format()`                                  | 要格式化的字符串，要替换到格式化字符串的参数                 | 返回格式化结果`String`                                       |
+
+从这个表可以看出，当需要改变字符串的内容时，`String` 类的方法都会返回一个新的 `String` 对象。同时，如果内容不改变，`String` 方法只是返回原始对象的一个引用而已。这可以节约存储空间以及避免额外的开销。
+
+### 格式化输出 ###
+
+
+
+#### printf() ####
+
+
+
+#### System.out.format() ####
+
+
+
+#### Formatter 类 ####
+
+
+
+#### 格式化修饰符 ####
+
+
+
+#### Formatter 转换 ####
+
+
+
+#### String.format() ####
+
+
+
+### 正则表达式 ###
+
+
+
+#### 基础 ####
+
+
+
+#### 创建正则表达式 ####
+
+
+
+#### 量词 ####
+
+
+
+#### CharSequence ####
+
+
+
+#### Pattern 和 Matcher ####
+
+
+
+#### find() ####
+
+
+
+#### 组（Groups） ####
+
+
+
+#### start() 和 end() ####
+
+
+
+#### Pattern 标记 ####
+
+
+
+#### split() ####
+
+
+
+#### 替换操作 ####
+
+
+
+#### reset() ####
+
+
+
+#### 正则表达式与 Java I/O ####
+
+
+
+### 扫描输入 ###
+
+
+
+#### Scanner 分隔符 ####
+
+
+
+#### 用正则表达式扫描 ####
+
+
+
+### StringTokenizer 类 ###
+
+
 

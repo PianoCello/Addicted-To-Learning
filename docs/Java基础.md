@@ -4391,101 +4391,131 @@ public class InfiniteRecursion {
 
 ### 格式化输出 ###
 
+#### printf() 和 format() ####
 
+使用特殊的占位符来表示数据将来的位置。而且它还将插入格式化字符串的参数，以逗号分隔，排成一行。例如：
 
-#### printf() ####
+```java
+public class SimpleFormat {   
+    public static void main(String[] args) {     
+        int x = 5;     
+        double y = 5.332542;     
+        // The old way: 
+        System.out.println("Row 1: [" + x + " " + y + "]");     
+        // The new way:     
+        System.out.format("Row 1: [%d %f]%n", x, y);     
+        // or     
+        System.out.printf("Row 1: [%d %f]%n", x, y);   
+    } 
+}
+```
 
+这一行代码在运行的时候，首先将 `x` 的值插入到 `%d` 的位置，然后将 `y` 的值插入到 `%f` 的位置。这些占位符叫做**格式修饰符**，它们不仅指明了插入数据的位置，同时还指明了将会插入什么类型的变量，以及如何格式化。在这个例子中 `%d` 表示 `x` 是一个整数，`%f` 表示 `y` 是一个浮点数（`float` 或者 `double`）。
 
-
-#### System.out.format() ####
-
-
+`String` 类也有一个 `static format()` 方法，可以格式化字符串。
 
 #### Formatter 类 ####
 
+在 Java 中，所有的格式化功能都是由 `java.util.Formatter` 类处理的。可以将 `Formatter` 看做一个翻译器，它将你的格式化字符串与数据翻译成需要的结果。当你创建一个 `Formatter` 对象时，需要向其构造器传递一些信息，告诉它最终的结果将向哪里输出：
 
+```java
+ public static void main(String[] args) {
+        
+     String str = "%s has %d and %f ";
+     Formatter formatter = new Formatter();
+     Formatter format = formatter.format(str, "zhangsan", 10, 63.0);
+
+     System.out.println(format);
+     //zhangsan has 10 and 63.000000 
+    }
+```
 
 #### 格式化修饰符 ####
 
+在插入数据时，如果想要优化空格与对齐，你需要更精细复杂的格式修饰符。以下是其通用语法：
 
+```java
+%[argument_index$][flags][width][.precision]conversion 
+```
 
-#### Formatter 转换 ####
+最常见的应用是控制一个字段的最小长度，这可以通过指定 *width* 来实现。`Formatter`对象通过在必要时添加空格，来确保一个字段至少达到设定长度。默认情况下，数据是右对齐的，不过可以通过使用 `-` 标志来改变对齐方向。
 
+与 *width* 相对的是 *precision\*，用于指定最大长度。\*width* 可以应用于各种类型的数据转换，并且其行为方式都一样。*precision* 则不然，当应用于不同类型的数据转换时，*precision* 的意义也不同。在将 *precision* 应用于 `String` 时，它表示打印 `string` 时输出字符的最大数量。而在将 *precision* 应用于浮点数时，它表示小数部分要显示出来的位数（默认是 6 位小数），如果小数位数过多则舍入，太少则在尾部补零。由于整数没有小数部分，所以 *precision* 无法应用于整数，如果你对整数应用 *precision*，则会触发异常。
 
+下面的程序应用格式修饰符来打印一个购物收据。这是 *Builder* 设计模式的一个简单实现，即先创建一个初始对象，然后逐渐添加新东西，最后调用 `build()` 方法完成构建：
+
+```java
+public class ReceiptBuilder {   
+    private double total = 0;   
+    private Formatter f =     
+        new Formatter(new StringBuilder());   
+    public ReceiptBuilder() {     
+        f.format(       
+          "%-15s %5s %10s%n", "Item", "Qty", "Price");     
+        f.format(       
+          "%-15s %5s %10s%n", "----", "---", "-----");   
+        }   
+    public void add(String name, int qty, double price) {     
+        f.format("%-15.15s %5d %10.2f%n", name, qty, price);     
+        total += price * qty;   
+    }  
+    public String build() {     
+        f.format("%-15s %5s %10.2f%n", "Tax", "",       
+          total * 0.06);     
+        f.format("%-15s %5s %10s%n", "", "", "-----");     
+        f.format("%-15s %5s %10.2f%n", "Total", "",       
+          total * 1.06);     
+        return f.toString();   
+    }   
+    public static void main(String[] args) {     
+        ReceiptBuilder receiptBuilder =       
+          new ReceiptBuilder();     
+        receiptBuilder.add("Jack's Magic Beans", 4, 4.25);     
+        receiptBuilder.add("Princess Peas", 3, 5.1);     
+        receiptBuilder.add(       
+          "Three Bears Porridge", 1, 14.29);     
+        System.out.println(receiptBuilder.build());   
+    } 
+} 
+```
+
+通过传入一个 `StringBuilder` 对象到 `Formatter` 的构造器，我们指定了一个容器来构建目标 `String`。你也可以通过不同的构造器参数，把结果输出到标准输出，甚至是一个文件里。
+
+#### Formatter 转换（Conversion） ####
+
+| 类型 | 含义               |
+| ---- | ------------------ |
+| `d`  | 整型（十进制）     |
+| `c`  | Unicode字符        |
+| `b`  | Boolean值          |
+| `s`  | String             |
+| `f`  | 浮点数（十进制）   |
+| `e`  | 浮点数（科学计数） |
+| `x`  | 整型（十六进制）   |
+| `h`  | 散列码（十六进制） |
+| `%`  | 字面值“%”          |
 
 #### String.format() ####
 
+`String.format()` 是一个 `static` 方法，它接受与 `Formatter.format()` 方法一样的参数，但返回一个 `String` 对象。
 
+```java
+public class DatabaseException extends Exception {   
+    public DatabaseException(int transactionID,     
+      int queryID, String message) {     
+      super(String.format("(t%d, q%d) %s", transactionID,         
+        queryID, message));   
+    }   
+    public static void main(String[] args) {     
+      try {       
+        throw new DatabaseException(3, 7, "Write failed");     
+      } catch(Exception e) {       
+        System.out.println(e);   
+		//DatabaseException: (t3, q7) Write failed 
+      }   
+    } 
+} 
+```
 
-### 正则表达式 ###
-
-
-
-#### 基础 ####
-
-
-
-#### 创建正则表达式 ####
-
-
-
-#### 量词 ####
-
-
-
-#### CharSequence ####
-
-
-
-#### Pattern 和 Matcher ####
-
-
-
-#### find() ####
-
-
-
-#### 组（Groups） ####
-
-
-
-#### start() 和 end() ####
-
-
-
-#### Pattern 标记 ####
-
-
-
-#### split() ####
-
-
-
-#### 替换操作 ####
-
-
-
-#### reset() ####
-
-
-
-#### 正则表达式与 Java I/O ####
-
-
-
-### 扫描输入 ###
-
-
-
-#### Scanner 分隔符 ####
-
-
-
-#### 用正则表达式扫描 ####
-
-
-
-### StringTokenizer 类 ###
-
-
+其实在 `String.format()` 内部，它也是创建了一个 `Formatter` 对象，然后将你传入的参数转给 `Formatter`。
 

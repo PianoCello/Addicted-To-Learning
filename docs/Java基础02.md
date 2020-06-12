@@ -600,89 +600,296 @@ class NonCovariantGenerics {
 
 注意：不能把一个涉及 **Apple** 的泛型赋值给一个涉及 **Fruit** 的泛型。但是，有时你想在两个类型间建立某种向上转型关系。通配符可以产生这种关系。**flist** 的类型现在是 `List<? extends Fruit>`，你可以读作“一个具有任何从 **Fruit** 继承的类型的列表”。如果你调用了一个返回 **Fruit** 的方法，则是安全的，因为你知道这个 **List** 中的任何对象至少具有 **Fruit** 类型，因此编译器允许这么做。
 
-### 自限定的类型 ###
+### 自限定泛型 ###
 
 在 Java 泛型中，有一个似乎经常性出现的惯用法，它相当令人费解：
 
 ```java
-class SelfBounded<T extends SelfBounded<T>> { }
+class SelfBounded<T extends SelfBounded<T>> {
+    T element;
+    SelfBounded<T> set(T arg) {
+        element = arg;
+        return this;
+    }
+    T get() { return element; }
+}
 ```
 
-这就像两面镜子彼此照向对方所引起的目眩效果一样，是一种无限反射。**SelfBounded** 类接受泛型参数 **T**，而 **T** 由一个边界类限定，这个边界就是拥有 **T** 作为其参数的 **SelfBounded**。
-
-#### 古怪的循环泛型 ####
-
-含义：创建一个新类，它继承自一个泛型类型，这个泛型类型接受我的类的名字作为其参数。
-
-作用：Java 中的泛型关乎**参数和返回类型**，因此它能够产生使用导出类作为其参数和返回类型的基类。它还能将导出类型用作其域类型，尽管这些将被擦除为 **Object** 的类型。
+**SelfBounded** 类接受泛型参数 **T**，而 **T** 由一个边界类限定，这个边界就是拥有 **T** 作为其参数的 **SelfBounded**。自限定所做的，就是要求在继承关系中，像下面这样使用这个类：
 
 ```java
-class BasicHolder<T> {
-    T element;
+class A extends SelfBounded<A>{}
+```
 
-    void set(T arg) {
-        element = arg;
+自限定限制只能强制作用于继承关系。如果使用自限定，就应该了解这个类所用的类型参数将与使用这个参数的类具有相同的基类型。这会强制要求使用这个类的每个人都要遵循这种形式。 还可以将自限定用于泛型方法：
+
+```java
+public class SelfBoundingMethods {
+    static <T extends SelfBounded<T>> T f(T arg) {
+        return arg.set(arg).get();
     }
 
-    T get() {
-        return element;
-    }
-
-    void f() {
-        System.out.println(element.getClass().getSimpleName());
-    }
-}
-
-class Subtype extends BasicHolder<Subtype> {
-}
-
-class CRGWithBasicHolder {
     public static void main(String[] args) {
-        Subtype st1 = new Subtype(), st2 = new Subtype();
-        st1.set(st2);
-        Subtype st3 = st1.get();
-
-        System.out.println(st2 == st3);
-        st1.f();
+        A a = f(new A());
     }
 }
 ```
 
-注意，这里有些东西很重要：新类 **Subtype** 接受的参数和返回的值具有 **Subtype** 类型而不仅仅是基类 **BasicHolder** 类型。这就是 **CuriouslyRecurringGeneric** 的本质：基类用导出类替代其参数。**这意味着泛型基类变成了一种其所有导出类的公共功能的模版**，但是这些功能对于其所有参数和返回值，将使用导出类型。也就是说，在所产生的类中将使用确切类型而不是基类型。因此，在**Subtype** 中，传递给 `set()` 的参数和从 `get()` 返回的类型都是确切的 **Subtype**。
+这可以防止这个方法被应用于除上述形式的自限定参数之外的任何事物上。
 
-#### 自限定 ####
+#### Enum 自限定 ####
 
+```java
+public abstract class Enum<E extends Enum<E>> {
+    ...
+}
+```
 
+深入解剖类声明 `Enum<E extends Enum<E>>`，它有以下几方面的意义：
+
+- `Enum` 的泛型 `E` 的上界为 `Enum` 自身。这确保了只有 `Enum` 的子类才被允许成为泛型参数。
+
+- 泛型 `E` 的上界被进一步限定为 `extends Enum<E>`，这确保了 `Enum<子类A>` 和 `Enum<子类A>的子类A` 的继承关系一定满足 `子类A extends Enum<子类A>` 。类似 `子类A extends Enum<子类B>` 这样的声明会被编译器拒绝，因为这个声明并不匹配泛型参数的上界。
+
+- 基于 `Enum` 被设计为泛型，这意味着 `Enum` 中的某些方法的**方法参数及返回类型**是未知类型。而根据 `E extends Enum<E>`，我们可以知道 `E` 肯定会是 `Enum` 的子类。所以，在具象化类型 `Enum<某具体类>` 中，这些泛型方法的参数及返回类型就会被编译器转换为某具体类型。总结来说，`E extends Enum<E>` 保证了每个 `Enum<E>` 的子类中都能够接收并返回该子类类型 `E`。
 
 #### 参数协变 ####
 
+**协变（covariant）和逆变（contravariant）**：
+
+- 协变：让一个带有协变参数的泛型接口（或委托）可以接收类型更加精细化，具体化的泛型接口（或委托）作为参数，可以看成OO中多态的一个延伸。
+- 逆变：让一个带有协变参数的泛型接口（或委托）可以接收粒度更粗的泛型接口或委托作为参数，这个过程实际上是参数类型更加精细化的过程。
+
+**自限定泛型**的价值在于它们可以产生**协变参数类型**——方法参数类型会随子类而变化。
+
+尽管自限定泛型还可以产生与子类类型相同的返回类型，但是这并不十分重要，因为**协变返回类型**在 Java 5 引入，**协变返回类型**意思是子类覆盖父类方法时返回值可以更加具体化。
+
+```java
+class Base {}
+class Derived extends Base {}
+interface OrdinaryGetter {
+    Base get();
+}
+interface DerivedGetter extends OrdinaryGetter {
+    // Overridden method return type can vary:
+    @Override
+    Derived get(); //返回值更加具体了
+}
+
+public class CovariantReturnTypes {
+    void test(DerivedGetter d) {
+        Derived d2 = d.get();
+    }
+}
+
+//使用自限定泛型实现返回值协变
+interface GenericGetter<T extends GenericGetter<T>> {
+    T get();
+}
+interface Getter extends GenericGetter<Getter> {}
+
+public class GenericsAndReturnTypes {
+    void test(Getter g) {
+        Getter result = g.get();
+        GenericGetter gg = g.get(); // Also the base type
+    }
+}
+```
+
+然而，在非泛型代码中，参数类型不能随子类型发生变化：
+
+```java
+// ------- 非泛型代码 无法实现参数协变 ----------
+class OrdinarySetter {
+    void set(Base base) {
+        System.out.println("OrdinarySetter.set(Base)");
+    }
+}
+class DerivedSetter extends OrdinarySetter {
+    void set(Derived derived) {
+        System.out.println("DerivedSetter.set(Derived)");
+    }
+}
+public class OrdinaryArguments {
+    public static void main(String[] args) {
+        Base base = new Base();
+        Derived derived = new Derived();
+        
+        DerivedSetter ds = new DerivedSetter();
+        ds.set(derived);
+        // Compiles--overloaded, not overridden!:
+        ds.set(base); //这两个 set() 方法重载了 没有发生参数协变
+    }
+}
+
+// ------- 自限定泛型 实现了参数协变 ----------
+interface SelfBoundSetter<T extends SelfBoundSetter<T>> {
+    void set(T arg);
+}
+interface Setter extends SelfBoundSetter<Setter> {}
+
+public class SelfBoundingAndCovariantArguments {
+    void testA(Setter s1, Setter s2, SelfBoundSetter sbs) {
+        //只能接收 Setter 类型参数 发生了参数协变
+        s1.set(s2);
+        //s1.set(sbs); //编译出错 参数不匹配
+    }
+}
+
+```
+
+编译器不能识别将基类型当作参数传递给 `set()` 的尝试，因为没有任何方法具有这样的签名。实际上，这个参数已经被覆盖。
 
 
-### 动态类型安全 ###
 
-### 泛型异常 ###
+## 数组 ##
 
-### 混型 ###
+数组需要你去创建和初始化，你可以通过下标对数组元素进行访问，数组的大小不会改变。
 
-#### C++ 中的混型 ####
+### 数组特性 ###
 
-#### 与接口的混型 ####
+将数组和集合区分开来的原因有三：**效率，类型，保存基本数据类型的能力**。在 Java 中，使用数组存储和随机访问对象引用序列是非常高效的。数组是简单的线性序列，这使得对元素的访问变得非常快，代价是数组对象的大小是固定的。
 
-#### 使用装饰器模式 ####
+你应该总是从 **ArrayList** 开始，它将数组封装起来。必要时，它会自动分配更多的数组空间，创建新数组，并将旧数组中的引用移动到新数组。这种灵活性需要开销，所以一个 **ArrayList** 的效率不如数组。
 
-#### 与动态代理混合 ####
+在泛型前，集合类以一种宽泛的方式处理对象。事实上，这些集合类把保存对象的类型默认为 **Object**，也就是 Java 中所有类的基类。而数组是优于 **预泛型**（pre-generic）集合类的，因为你创建一个数组就可以保存特定类型的数据。这意味着你获得了一个编译时的类型检查，而这可以防止你插入错误的数据类型。**引入泛型之后，数组唯一剩下的优势就是效率。**
 
-### 潜在类型机制 ###
+一个数组可以保存基本数据类型，而一个预泛型的集合不可以。然而对于泛型而言，集合可以指定和检查他们保存对象的类型，而通过 **自动装箱**（autoboxing）机制，集合表现得就像它们可以保存基本数据类型一样。
 
-### 对缺乏潜在类型机制的补偿 ###
+### 定义数组 ###
 
-#### 反射 ####
+不管你使用的什么类型的数组，数组中的数据集实际上都是对堆中真正对象的引用。数组对象的一部分就是只读的 **length** 成员函数，它能告诉你数组对象中可以存储多少元素。**[ ]** 语法是你访问数组对象的唯一方式。
 
-#### 将一个方法应用于序列 ####
+对象数组存储的是对象的引用，而基本数据类型数组则直接存储基本数据类型的值。
 
-### Java8 中的辅助潜在类型 ###
+```java
+//数组必须先分配空间再使用
+int[] arr = new int[3];
+int[] arr2 = new int[]{1, 2, 3};
+int[] arr3 = {1, 2, 3};
+String[] str = new String[3];
 
-#### 使用 Suppliers 类的通用方法 ####
+System.out.println(Arrays.toString(arr));
+System.out.println(Arrays.toString(arr2));
+System.out.println(Arrays.toString(arr3));
+System.out.println(Arrays.toString(str));
+
+//未显示初始化的数组会被执行默认初始化
+[0, 0, 0]
+[1, 2, 3]
+[1, 2, 3]
+[null, null, null]
+```
+
+### 多维数组 ###
+
+你也可以使用 **new** 分配数组。这是一个使用 **new** 表达式分配的三维数组：
+
+```Java
+public class ThreeDWithNew {
+  public static void main(String[] args) {
+    // 3-D array with fixed length:
+    int[][][] a = new int[2][2][4];
+    System.out.println(Arrays.deepToString(a));
+  }
+}
+```
+
+这个例子使用 **Arrays.deepToString()** 方法，将多维数组转换成 **String** 类型。
+
+### Arrays.fill() 方法 ###
+
+Java 标准库 **Arrays** 类包括一个普通的 **fill()** 方法，该方法将单个值复制到整个数组，或者在对象数组的情况下，将相同的引用复制到整个数组：
+
+```java
+int[] ints = new int[10];
+int[] ints2 = new int[10];
+//Assigns the specified int value
+//to each element of the specified array of ints.
+Arrays.fill(ints, 2);
+//Assigns the specified int value to each element of the specified
+//range of the specified array of ints.  The range to be filled
+//extends from fromIndex, inclusive, to toIndex, exclusive. 
+Arrays.fill(ints2, 2,5,8);
+
+System.out.println(Arrays.toString(ints));
+System.out.println(Arrays.toString(ints2));
+//[2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+//[0, 0, 8, 8, 8, 0, 0, 0, 0, 0]
+```
+
+### Arrays.setAll() 方法 ###
+
+在 Java 8中，Array.setAll() 使用一个生成器并生成不同的值，可以选择基于数组的索引元素（通过访问当前索引，生成器可以读取数组值并对其进行修改）。
+
+ **static Arrays.setAll()** 的重载签名为：
+
+- **void setAll(int[] a, IntUnaryOperator gen)**
+- **void setAll(long[] a, IntToLongFunction gen)**
+- **void setAll(double[] a, IntToDoubleFunction gen)**
+- **void setAll(T[] a, IntFunction<? extends T> gen)**
+
+除了 **int** , **long** , **double** 有特殊的版本，其他的一切都由泛型版本处理。生成器不是 **Supplier** 因为它们不带参数，并且必须将 **int** 数组索引作为参数。
+
+### 数组元素修改 ###
+
+传递给 **Arrays.setAll()** 的生成器函数可以使用它接收到的数组索引修改现有的数组元素:
+
+```java
+class ModifyExisting {
+    public static void main(String[] args) {
+
+        double[] da = new double[]{1.0, 2.3, 5.65, 89.54};
+
+        Arrays.setAll(da, n -> da[n] * 100);
+
+        System.out.println(Arrays.toString(da));
+        //[100.0, 229.99999999999997, 565.0, 8954.0]
+    }
+}
+```
+
+### 数组并行 ###
+
+
+
+### Arrays 工具类 ###
+
+
+
+### 数组拷贝 ###
+
+
+
+### 数组比较 ###
+
+
+
+### 流和数组 ###
+
+
+
+### 数组排序 ###
+
+
+
+### Arrays.sort() 的使用 ###
+
+
+
+### 并行排序 ###
+
+
+
+### binarySearch 二分查找 ###
+
+
+
+### parallelPrefix 并行前缀 ###
+
+
+
+
 
 
 

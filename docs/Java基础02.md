@@ -831,8 +831,6 @@ System.out.println(Arrays.toString(ints2));
 
 除了 **int** , **long** , **double** 有特殊的版本，其他的一切都由泛型版本处理。生成器不是 **Supplier** 因为它们不带参数，并且必须将 **int** 数组索引作为参数。
 
-### 数组元素修改 ###
-
 传递给 **Arrays.setAll()** 的生成器函数可以使用它接收到的数组索引修改现有的数组元素:
 
 ```java
@@ -849,27 +847,141 @@ class ModifyExisting {
 }
 ```
 
-### 数组并行 ###
+### 并行数组 ###
 
+在你深刻理解所有的问题之前，您可以很容易地编写比非并行版本运行速度更慢的代码，并行编程看起来更像是一门艺术而非科学。**用简单的方法编写代码，不要开始处理并行性，除非它成为一个问题。**
 
+最好从数据的角度来考虑并行性。对于大量数据(以及可用的额外处理器)，并行可能会有所帮助。但您也可能使事情变得更糟。
+
+```java
+class ParallelSetAll {
+    static final int SIZE = 10_000_000;
+
+    static void intArray() {
+        int[] ia = new int[SIZE];
+        Arrays.setAll(ia, i -> i + 1);
+        Arrays.parallelSetAll(ia, i -> i + 2);
+    }
+
+    static void longArray() {
+        long[] la = new long[SIZE];
+        Arrays.setAll(la, i -> i + 1);
+        Arrays.parallelSetAll(la, i -> i + 2);
+    }
+
+    public static void main(String[] args) {
+        intArray();
+        longArray();
+    }
+}
+```
+
+JDK 中的 Arrays.parallelSetAll() 方法源码：
+
+```java
+public static <T> void parallelSetAll(T[] array, 
+IntFunction<? extends T> generator) {
+    Objects.requireNonNull(generator);
+    IntStream.range(0, array.length).parallel().
+    forEach(i -> { array[i] = generator.apply(i); });
+}
+```
 
 ### Arrays 工具类 ###
 
+该类包含许多其他有用的 **静态** 程序方法：
 
-
-### 数组拷贝 ###
-
-
+- **asList()**: 获取任何序列或数组，并将其转换为一个 **列表集合**（这个集合不能改变大小）。
+- **copyOf()**：以新的长度创建现有数组的新副本。
+- **copyOfRange()**：创建现有数组的一部分的新副本。
+- **equals()**：比较两个数组是否相等。
+- **deepEquals()**：多维数组的相等性比较。
+- **stream()**：生成数组元素的流。
+- **hashCode()**：生成数组的哈希值(您将在附录中了解这意味着什么:理解equals()和hashCode())。
+- **deepHashCode()**: 多维数组的哈希值。
+- **sort()**：排序数组
+- **parallelSort()**：对数组进行并行排序，以提高速度。
+- **binarySearch()**：在已排序的数组中查找元素。
+- **parallelPrefix()**：使用提供的函数并行累积(以获得速度)。基本上，就是数组的reduce()。
+- **spliterator()**：从数组中产生一个Spliterator;这是本书没有涉及到的流的高级部分。
+- **toString()**：为数组生成一个字符串表示。你在整个章节中经常看到这种用法。
+- **deepToString()**：为多维数组生成一个字符串。你在整个章节中经常看到这种用法。对于所有基本类型和对象，所有这些方法都是重载的。
 
 ### 数组比较 ###
 
+**数组** 提供了 **equals()** 来比较一维数组，以及 **deepEquals()** 来比较多维数组。对于所有原生类型和对象，这些方法都是重载的。
 
+数组相等的含义：数组必须有相同数量的元素，并且每个元素必须与另一个数组中的对应元素相等，对每个元素使用 **equals()**。
 
 ### 流和数组 ###
 
+**stream()** 方法很容易从某些类型的数组中生成元素流。
 
+```JAVA
+public class StreamFromArray {
+    public static void main(String[] args) {
+        int[] ia = new int[0];
+        Arrays.stream(ia).skip(3).limit(5)
+                .map(i -> i + 10).forEach(System.out::println);
+        Arrays.stream(new long[10]);
+        Arrays.stream(new double[10]);
+        Arrays.stream(new String[10]);
+    }
+}
+```
+
+只有“原生类型” **int**、**long** 和 **double** 可以与 **Arrays.stream()** 一起使用;对于其他的，您必须以某种方式获得一个包装类型的数组。
+
+通常，将数组转换为流来生成所需的结果要比直接操作数组容易得多。请注意，即使流已经“用完”(您不能重复使用它)，您仍然拥有该数组，因此您可以以其他方式使用它----包括生成另一个流。
 
 ### 数组排序 ###
+
+对于基本数据类型的数组，Arrays.sort() 使用的是**双基准快速排序**（Dual-Pivot Quicksort）；
+
+对于引用数据类型的数组，Arrays.sort() 使用的是优化的合并排序。
+
+Java有两种方式提供比较功能。第一种是通过实现 **Comparable** 接口，重写方法 **compareTo()**。第二种是通过实现 **Comparator** 接口，重写方法 **compareTo()**。
+
+```java
+class CompType implements Comparable<CompType> {
+    private static int count = 1;
+    private static SplittableRandom r = new SplittableRandom(47);
+    private int i;
+    private int j;
+
+    private CompType(int n1, int n2) {
+        i = n1;
+        j = n2;
+    }
+
+    public static CompType get() {
+        return new CompType(r.nextInt(100), r.nextInt(100));
+    }
+
+    public static void main(String[] args) {
+        CompType[] a = new CompType[12];
+        Arrays.setAll(a, n -> get());
+
+        System.out.println("Before sorting \n"+Arrays.toString(a));
+        Arrays.sort(a);
+        System.out.println("After sorting \n"+Arrays.toString(a));
+    }
+
+    @Override
+    public String toString() {
+        String result = "[i = " + i + ", j = " + j + "]";
+        if (count++ % 3 == 0) {
+            result += "\n";
+        }
+        return result;
+    }
+
+    @Override
+    public int compareTo(CompType rv) {
+        return (Integer.compare(i, rv.i));
+    }
+}
+```
 
 
 

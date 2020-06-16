@@ -940,7 +940,7 @@ public class StreamFromArray {
 
 对于引用数据类型的数组，Arrays.sort() 使用的是优化的合并排序。
 
-Java有两种方式提供比较功能。第一种是通过实现 **Comparable** 接口，重写方法 **compareTo()**。第二种是通过实现 **Comparator** 接口，重写方法 **compareTo()**。
+Java有两种方式提供比较功能。第一种是通过实现 **Comparable** 接口，重写方法 **compareTo()**。第二种是通过实现 **Comparator** 接口，重写方法 **compare()**。
 
 ```java
 class CompType implements Comparable<CompType> {
@@ -983,25 +983,250 @@ class CompType implements Comparable<CompType> {
 }
 ```
 
+**get()** 方法通过使用随机值初始化CompType对象来构建它们。在 **main()** 中，**get()** 与 **Arrays.setAll()** 一起使用，以填充一个 **CompType类型** 数组，然后对其排序。如果没有实现 **Comparable接口**，那么当您试图调用 **sort()** 时，您将在运行时获得一个 **ClassCastException** 。这是因为 **sort()** 将其参数转换为 **Comparable类型**。
 
-
-### Arrays.sort() 的使用 ###
-
-
-
-### 并行排序 ###
-
-
-
-### binarySearch 二分查找 ###
-
-
-
-### parallelPrefix 并行前缀 ###
+总结：应该“优先选择集合而不是数组”。只有当您证明性能是一个问题（并且切换到一个数组实际上会有很大的不同）时，才应该重构到数组。
 
 
 
 
+
+# 枚举 #
+
+### 枚举的定义 ###
+
+使用 **enum** 关键字定义枚举类，它被编译器编译为 `final class Xxx extends Enum { … }`
+
+```java
+//定义 color 枚举类
+public enum Color {
+    RED, GREEN, BLUE;
+}
+
+//编译器编译出的 class 文件
+public final class Color extends Enum<Color> {//继承自 Enum，标记为 final 
+    // 每个实例均为全局唯一:
+    public static final Color RED = new Color();
+    public static final Color GREEN = new Color();
+    public static final Color BLUE = new Color();
+    // private构造方法，确保外部无法调用new操作符:
+    private Color() {}
+}
+```
+
+此外，还可以在定义枚举的时候添加属性：
+
+```java
+public enum Weekday {
+    MON(1, "星期一"), 
+    TUE(2, "星期二"), 
+    WED(3, "星期三"), 
+    THU(4, "星期四"), 
+    FRI(5, "星期五"), 
+    SAT(6, "星期六"), 
+    SUN(0, "星期日");
+
+    public final int dayValue;
+    private final String chinese;
+
+    private Weekday(int dayValue, String chinese) {
+        this.dayValue = dayValue;
+        this.chinese = chinese;
+    }
+
+    @Override
+    public String toString() {
+        return this.chinese;
+    }
+}
+```
+
+### enum 的方法 ###
+
+因为 enum 是一个 class ，每个枚举的值都是 class 实例，因此，这些实例有一些方法：
+
+- name() 返回常量名
+
+```java
+String s = Color.RED.name(); // "RED"
+```
+
+- ordinal() 返回定义的常量的顺序，从 0 开始计数
+
+```java
+int n = Color.GREEN.ordinal(); // 1
+```
+
+- 默认情况下，对枚举常量调用 toString() 会返回和 name() 一样的字符串。但是，toString() 可以被覆写，而 name() 则不行。
+
+#### enum 的特点 ####
+
+- 定义的 `enum` 类型总是继承自 `java.lang.Enum` （不能再继承其他类了，因为 Java 不支持多继承），且无法被继承（因为编译后被 final 修饰）；
+- 只能定义出 `enum` 的实例，而无法通过 `new` 操作符创建 `enum` 的实例（构造方法私有）；
+- 定义的每个实例都是引用类型的唯一实例（ jvm 中只存在一份）；
+- 可以将 `enum` 类型用于 `switch` 语句，因为枚举类天生具有类型信息和有限个枚举常量，所以比 `int` 、 `String` 类型更适合用在 `switch` 语句中。
+
+#### enum 的比较 ####
+
+使用 `enum` 定义的枚举类是一种引用类型。一般来说，引用类型比较，要使用 equals() 方法，如果使用 `==` 比较，它比较的是两个引用类型的引用是否指向同一个对象。因此，引用类型比较，要始终使用 `equals()` 方法，但 `enum` 类型可以例外，这是因为 `enum` 类型的每个常量在 JVM 中只有一个唯一实例，所以可以直接用 `==` 比较。
+
+```Java
+if (day == Weekday.FRI) {
+    // ok!
+   }
+if (day.equals(Weekday.SUN)) { 
+    // ok, but more code!
+   }
+```
+
+### 随机选择枚举 ###
+
+```java
+public class Enums {
+    private static Random rand = new Random(47);
+
+    public static <T extends Enum<T>> T random(Class<T> ec) {
+        return random(ec.getEnumConstants());
+    }
+
+    public static <T> T random(T[] values) {
+        return values[rand.nextInt(values.length)];
+    }
+}
+```
+
+自限定泛型 <T extends Enum<T>> 表示 T 是一个 enum 实例。而将 Class<T> 作为参数的话，我们就可以利用 Class 对象得到 enum 实例的数组了。重载后的 random() 方法只需使用 T[] 作为参数，因为它并不会调用 Enum 上的任何操作，它只需从数组中随机选择一个元素即可。这样，最终的返回类型正是 enum 的类型。
+
+下面是 random() 方法的一个简单示例：
+
+```java
+enum Activity { 
+    SITTING, LYING, STANDING, HOPPING,
+    RUNNING, DODGING, JUMPING, FALLING, FLYING }
+
+public class RandomTest {
+    public static void main(String[] args) {
+        for(int i = 0; i < 20; i++)
+            System.out.print(
+                    Enums.random(Activity.class) + " ");
+    }
+}
+```
+
+### 使用接口组织枚举 ###
+
+在一个接口的内部，创建实现该接口的枚举，以此将元素进行分组，可以达到将枚举元素分类组织的目的。举例来说，假设你想用 enum 来表示不同类别的食物，同时还希望每个 enum 元素仍然保持 Food 类型。那可以这样实现：
+
+```java
+public interface Food {
+    enum Appetizer implements Food {//开胃菜
+        SALAD, SOUP, SPRING_ROLLS;
+    }
+    enum MainCourse implements Food {//主食
+        LASAGNE, BURRITO, PAD_THAI,
+        LENTILS, HUMMOUS, VINDALOO;
+    }
+    enum Dessert implements Food {//饭后甜点
+        TIRAMISU, GELATO, BLACK_FOREST_CAKE,
+        FRUIT, CREME_CARAMEL;
+    }
+    enum Coffee implements Food {//咖啡
+        BLACK_COFFEE, DECAF_COFFEE, ESPRESSO,
+        LATTE, CAPPUCCINO, TEA, HERB_TEA;
+    }
+}
+```
+
+想创建一个“枚举的枚举”，那么可以创建一个新的 enum，然后用其实例包装 Food 中的每一个 enum 类：
+
+```java
+public enum Meal2 {
+    APPETIZER(Food.Appetizer.class),
+    MAINCOURSE(Food.MainCourse.class),
+    DESSERT(Food.Dessert.class),
+    COFFEE(Food.Coffee.class);
+    
+    private Food[] values;
+    private Meal2(Class<? extends Food> kind) {
+        values = kind.getEnumConstants();
+    }
+    public interface Food {
+        enum Appetizer implements Food {
+            SALAD, SOUP, SPRING_ROLLS;
+        }
+        enum MainCourse implements Food {
+            LASAGNE, BURRITO, PAD_THAI,
+            LENTILS, HUMMOUS, VINDALOO;
+        }
+        enum Dessert implements Food {
+            TIRAMISU, GELATO, BLACK_FOREST_CAKE,
+            FRUIT, CREME_CARAMEL;
+        }
+        enum Coffee implements Food {
+            BLACK_COFFEE, DECAF_COFFEE, ESPRESSO,
+            LATTE, CAPPUCCINO, TEA, HERB_TEA;
+        }
+    }
+    
+    public Food randomSelection() {
+        return Enums.random(values);
+    }
+    
+    public static void main(String[] args) {
+        for(int i = 0; i < 5; i++) {
+            for(Meal2 meal : Meal2.values()) {
+                Food food = meal.randomSelection();
+                System.out.println(food);
+            }
+            System.out.println("***");
+        }
+    }
+}
+```
+
+getEnumConstants() 方法，可以从该 Class 对象中取得某个 Food 子类的所有 enum 实例。通过 meal.randomSelection() 方法随机地选择一个 Food，我们便能够生成一份菜单。
+
+### 使用 EnumSet  ###
+
+EnumSet 是一个抽象类，其子类有两个，一个是 RegularEnumSet（当集合元素 <= 64），另一个是 JumboEnumSet（当集合元素 > 64）。在实现上，它们将一个 long 值作为比特向量，所以 EnumSet 非常快速高效。使用 EnumSet 的优点是，它在说明一个二进制位是否存在时，具有更好的表达能力，并且无需担心性能。
+
+
+
+
+
+### 使用 EnumMap ###
+
+
+
+### 常量特定方法 ###
+
+
+
+#### 使用 enum 的职责链 ####
+
+
+
+#### 使用 enum 的状态机 ####
+
+
+
+### 多路分发 ###
+
+
+
+#### 使用 enum 分发 ####
+
+
+
+#### 使用常量相关的方法 ####
+
+
+
+#### 使用 EnumMap 进行分发 ####
+
+
+
+#### 使用二维数组 ####
 
 
 

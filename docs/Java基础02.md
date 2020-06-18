@@ -1188,45 +1188,414 @@ getEnumConstants() 方法，可以从该 Class 对象中取得某个 Food 子类
 
 ### 使用 EnumSet  ###
 
-EnumSet 是一个抽象类，其子类有两个，一个是 RegularEnumSet（当集合元素 <= 64），另一个是 JumboEnumSet（当集合元素 > 64）。在实现上，它们将一个 long 值作为比特向量，所以 EnumSet 非常快速高效。使用 EnumSet 的优点是，它在说明一个二进制位是否存在时，具有更好的表达能力，并且无需担心性能。
+EnumSet 是一个抽象类，其子类有两个，一个是 RegularEnumSet（当集合元素 <= 64），另一个是 JumboEnumSet（当集合元素 > 64）。在实现上，它们将一个 long 值作为**位向量**，所以 EnumSet 非常快速高效。使用 EnumSet 的优点是，它在说明一个二进制位是否存在时，具有更好的表达能力，并且无需担心性能。
 
+```java
+public class EnumSetTest {
+    enum Season {
+        SPRING,SUMMER,FALL,WINTER
+    }
 
+    public static void main(String[] args) {
+        EnumSet<Season> enumSet = EnumSet.noneOf(Season.class);
+        enumSet.add(Season.SPRING);
+        enumSet.add(Season.SUMMER);
+        System.out.println(enumSet);
+    }
+}
+```
 
-
+EnumSet 在创建集合对象的时候总会调用 **EnumSet.noneOf(Class)** 方法，该方法会一次性缓存枚举类的所有枚举，在后续的任何操作都只是对 **long** 类型的**位向量**进行对应的移位操作。
 
 ### 使用 EnumMap ###
 
+EnumMap 是一种特殊的 Map，它要求其中的键（key）必须来自一个 enum，由于 enum 本身的限制，所以 EnumMap 在内部可由数组实现。
 
+下面的例子演示了**命令模式**的用法。一般来说，命令模式首先需要一个只有单一方法的接口，然后从该接口实现具有各自不同的行为的多个子类。
+
+```java
+public class EnumMapTest {
+    interface Command {
+        void action();
+    }
+
+    enum Season {
+        SPRING, SUMMER, FALL, WINTER
+    }
+
+    public static void main(String[] args) {
+        EnumMap<Season, Command> em = new EnumMap<>(Season.class);
+
+        em.put(Season.SPRING, () -> System.out.println("Spring is coming !"));
+        em.put(Season.SUMMER, () -> System.out.println("oh, it's so hot!"));
+
+        for (Map.Entry<Season, Command> e : em.entrySet()) {
+            System.out.print(e.getKey() + ": ");
+            e.getValue().action();
+        }
+        try { // If there's no value for a particular key:
+            em.get(Season.WINTER).action();
+        } catch (Exception e) {
+            System.out.println("Expected: " + e);
+        }
+    }
+}
+```
+
+与 EnumSet 一样，enum 实例定义时的次序决定了其在 EnumMap 中的顺序。
+
+main() 方法的最后部分说明，enum 的每个实例作为一个键，总是存在的。但是，如果你没有为这个键调用 put() 方法来存入相应的值的话，其对应的值就是 null。
 
 ### 常量特定方法 ###
 
+Java 的 enum 允许程序员编写实例方法，从而为每个 enum 实例赋予各自不同的行为。要实现常量相关的方法，你需要为 enum 定义一个或多个 abstract 方法，然后为每个 enum 实例实现该抽象方法。参考下面的例子：
 
+```java
+public enum ConstantSpecificMethod {
+    DATE_TIME {
+        @Override
+        String getInfo() {
+            return DateFormat.getDateInstance()
+                            .format(new Date());
+        }
+    },
+    CLASSPATH {
+        @Override
+        String getInfo() {
+            return System.getenv("CLASSPATH");
+        }
+    },
+    VERSION {
+        @Override
+        String getInfo() {
+            return System.getProperty("java.version");
+        }
+    };
+    abstract String getInfo();
+    public static void main(String[] args) {
+        for(ConstantSpecificMethod csm : values())
+            System.out.println(csm.getInfo());
+    }
+}
+```
 
-#### 使用 enum 的职责链 ####
-
-
-
-#### 使用 enum 的状态机 ####
-
-
+通过相应的 enum 实例，我们可以调用其上的方法。这通常也称为表驱动的代码（table-driven code，和**命令模式**很相似）。
 
 ### 多路分发 ###
 
+如果一个系统要执行数学表达式，我们可能会声明 Number.plus(Number) 等，其中 Number 是各种数字对象的超类。然而，当你声明 a.plus(b) 时，你并不知道 a 或 b 的确切类型，那你如何能让它们正确地交互呢？
 
+**Java 只支持单路分发**。也就是说，如果要执行的操作包含了不止一个类型未知的对象时，那么 Java 的动态绑定机制只能处理其中一个的类型。
+
+解决这个问题的办法就是**多路分发**，**多态只能发生在方法调用时**，要利用多路分发，程序员必须为每一个类型提供一个实际的方法调用，如果你要处理两个不同的类型体系，就需要为每个类型体系执行一个方法调用。
+
+#### 基于接口的多路分发 ####
+
+在下面的例子中（实现了 “石头、剪刀、布”游戏，也称为 RoShamBo）对应的方法是 compete() 和 eval()，二者都是同一个类型的成员，它们可以产生三种 Outcome 实例中的一个作为结果：
+
+```java
+enum Outcome {
+    WIN,
+    LOSE,
+    DRAW
+}
+
+interface Item {
+    Outcome compete(Item it);
+
+    Outcome eval(Paper p);
+
+    Outcome eval(Scissors s);
+
+    Outcome eval(Rock r);
+}
+
+class Paper implements Item {
+    @Override
+    public Outcome compete(Item it) {
+        return it.eval(this);
+    }
+
+    @Override
+    public Outcome eval(Paper p) {
+        return DRAW;
+    }
+
+    @Override
+    public Outcome eval(Scissors s) {
+        return WIN;
+    }
+
+    @Override
+    public Outcome eval(Rock r) {
+        return LOSE;
+    }
+
+    @Override
+    public String toString() {
+        return "Paper";
+    }
+}
+
+class Scissors implements Item {
+    @Override
+    public Outcome compete(Item it) {
+        return it.eval(this);
+    }
+
+    @Override
+    public Outcome eval(Paper p) {
+        return LOSE;
+    }
+
+    @Override
+    public Outcome eval(Scissors s) {
+        return DRAW;
+    }
+
+    @Override
+    public Outcome eval(Rock r) {
+        return WIN;
+    }
+
+    @Override
+    public String toString() {
+        return "Scissors";
+    }
+}
+
+class Rock implements Item {
+    @Override
+    public Outcome compete(Item it) {
+        return it.eval(this);
+    }
+
+    @Override
+    public Outcome eval(Paper p) {
+        return WIN;
+    }
+
+    @Override
+    public Outcome eval(Scissors s) {
+        return LOSE;
+    }
+
+    @Override
+    public Outcome eval(Rock r) {
+        return DRAW;
+    }
+
+    @Override
+    public String toString() {
+        return "Rock";
+    }
+}
+
+public class RoShamBo1 {
+    private static Random rand = new Random(47);
+
+    public static Item newItem() {
+        switch (rand.nextInt(3)) {
+            default:
+            case 0:
+                return new Scissors();
+            case 1:
+                return new Paper();
+            case 2:
+                return new Rock();
+        }
+    }
+
+    public static void match(Item a, Item b) {
+        System.out.println(
+                a + " vs. " + b + ": " + a.compete(b));
+    }
+
+    public static void main(String[] args) {
+        for (int i = 0; i < 20; i++) {
+            match(newItem(), newItem());
+        }
+    }
+}
+```
+
+Item 是这几种类型的接口，将会被用作多路分发。RoShamBo1.match() 有两个 Item 参数，通过调用 Item.compete() 方法开始两路分发。要判定 a 的类型，分发机制会在 a 的实际类型的 compete() 内部起到分发的作用。compete() 方法通过调用 eval() 来为另一个类型实现第二次分法。将自身（this）作为参数调用 eval()，能够调用重载过的 eval() 方法，这能够保留第一次分发的类型信息。当第二次分发完成时，你就能够知道两个 Item 对象的具体类型了。
 
 #### 使用 enum 分发 ####
 
+```java
+class Enums {
+    private static Random rand = new Random(47);
 
+    public static <T extends Enum<T>> T random(Class<T> ec) {
+        return random(ec.getEnumConstants());
+    }
+
+    public static <T> T random(T[] values) {
+        return values[rand.nextInt(values.length)];
+    }
+}
+
+enum Outcome {
+    WIN,
+    LOSE,
+    DRAW
+}
+
+interface Competitor<T extends Competitor<T>> {
+    Outcome compete(T competitor);
+}
+
+class RoShamBo {
+    static <T extends Competitor<T>> void match(T a, T b) {
+        System.out.println(
+                a + " vs. " + b + ": " + a.compete(b));
+    }
+
+    static <T extends Enum<T> & Competitor<T>> void play(Class<T> rsbClass, int size) {
+        for (int i = 0; i < size; i++) {
+            match(Enums.random(rsbClass), Enums.random(rsbClass));
+        }
+    }
+}
+
+enum RoShamBo2 implements Competitor<RoShamBo2> {
+    PAPER(DRAW, LOSE, WIN),
+    SCISSORS(WIN, DRAW, LOSE),
+    ROCK(LOSE, WIN, DRAW);
+
+    Outcome vPAPER, vSCISSORS, vROCK;
+
+    RoShamBo2(Outcome paper,
+              Outcome scissors, Outcome rock) {
+        this.vPAPER = paper;
+        this.vSCISSORS = scissors;
+        this.vROCK = rock;
+    }
+
+    @Override
+    public Outcome compete(RoShamBo2 it) {
+        switch (it) {
+            default:
+            case PAPER:
+                return vPAPER;
+            case SCISSORS:
+                return vSCISSORS;
+            case ROCK:
+                return vROCK;
+        }
+    }
+
+    public static void main(String[] args) {
+        RoShamBo.play(RoShamBo2.class, 20);
+    }
+}
+```
 
 #### 使用常量相关的方法 ####
 
+常量相关的方法允许我们为每个 enum 实例提供方法的不同实现，这使得常量相关的方法似乎是实现多路分发的完美解决方案。
 
+```java
+public enum RoShamBo3 implements Competitor<RoShamBo3> {
+    PAPER {
+        @Override
+        public Outcome compete(RoShamBo3 it) {
+            switch(it) {
+                default: // To placate the compiler
+                case PAPER: return DRAW;
+                case SCISSORS: return LOSE;
+                case ROCK: return WIN;
+            }
+        }
+    },
+    SCISSORS {
+        @Override
+        public Outcome compete(RoShamBo3 it) {
+            switch(it) {
+                default:
+                case PAPER: return WIN;
+                case SCISSORS: return DRAW;
+                case ROCK: return LOSE;
+            }
+        }
+    },
+    ROCK {
+        @Override
+        public Outcome compete(RoShamBo3 it) {
+            switch(it) {
+                default:
+                case PAPER: return LOSE;
+                case SCISSORS: return WIN;
+                case ROCK: return DRAW;
+            }
+        }
+    };
+    @Override
+    public abstract Outcome compete(RoShamBo3 it);
+    public static void main(String[] args) {
+        RoShamBo.play(RoShamBo3.class, 20);
+    }
+}
+```
 
 #### 使用 EnumMap 进行分发 ####
 
+使用 EnumMap 能够实现“真正的”两路分发。
 
+```java
+import static enums.Outcome.*;
+enum RoShamBo5 implements Competitor<RoShamBo5> {
+    PAPER, SCISSORS, ROCK;
+    static EnumMap<RoShamBo5,EnumMap<RoShamBo5,Outcome>>
+            table = new EnumMap<>(RoShamBo5.class);
+    static {
+        for(RoShamBo5 it : RoShamBo5.values())
+            table.put(it, new EnumMap<>(RoShamBo5.class));
+        initRow(PAPER, DRAW, LOSE, WIN);
+        initRow(SCISSORS, WIN, DRAW, LOSE);
+        initRow(ROCK, LOSE, WIN, DRAW);
+    }
+    static void initRow(RoShamBo5 it,
+                        Outcome vPAPER, Outcome vSCISSORS, Outcome vROCK) {
+        EnumMap<RoShamBo5,Outcome> row =
+                RoShamBo5.table.get(it);
+        row.put(RoShamBo5.PAPER, vPAPER);
+        row.put(RoShamBo5.SCISSORS, vSCISSORS);
+        row.put(RoShamBo5.ROCK, vROCK);
+    }
+    @Override
+    public Outcome compete(RoShamBo5 it) {
+        return table.get(this).get(it);
+    }
+    public static void main(String[] args) {
+        RoShamBo.play(RoShamBo5.class, 20);
+    }
+}
+```
 
 #### 使用二维数组 ####
 
+我们还可以进一步简化实现两路分发的解决方案。我们注意到，每个 enum 实例都有一个固定的值（基于其声明的次序），并且可以通过 ordinal() 方法取得该值。因此我们可以使用二维数组，将竞争者映射到竞争结果。
 
+```java
+enum RoShamBo6 implements Competitor<RoShamBo6> {
+    PAPER, SCISSORS, ROCK;
+
+    private static Outcome[][] table = {
+            {DRAW, LOSE, WIN}, // PAPER
+            {WIN, DRAW, LOSE}, // SCISSORS
+            {LOSE, WIN, DRAW}, // ROCK
+    };
+
+    @Override
+    public Outcome compete(RoShamBo6 other) {
+        return table[this.ordinal()][other.ordinal()];
+    }
+
+    public static void main(String[] args) {
+        RoShamBo.play(RoShamBo6.class, 20);
+    }
+}
+```
 

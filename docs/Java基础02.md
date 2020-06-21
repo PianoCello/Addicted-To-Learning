@@ -1599,3 +1599,185 @@ enum RoShamBo6 implements Competitor<RoShamBo6> {
 }
 ```
 
+事实上，以上所有的解决方案只是各种不同类型的表罢了。不过，分析各种表的表现形式，找出最适合的那一种，还是很有价值的。对于某类问题而言，“**表驱动式编码**”的概念具有非常强大的功能。
+
+
+
+## 注解 ##
+
+注解（也被称为元数据）为我们在代码中添加信息提供了一种形式化的方式，使我们可以在稍后的某个时刻更容易的使用这些数据。
+
+通过使用注解，你可以将元数据保存在 Java 源代码中。并拥有如下优势：简单易读的代码，编译器类型检查，使用 annotation API 为自己的注解构造处理工具。
+
+ **java.lang** 包中的标准注解：
+
+- **@Override**：表示当前的方法定义将覆盖基类的方法。如果你不小心拼写错误，编译器就会发出错误提示。
+- **@Deprecated**：如果使用该注解的元素被调用，编译器就会发出警告信息。
+- **@SuppressWarnings**：关闭不当的编译器警告信息。
+- **@SafeVarargs**：在 Java 7 中加入用于禁止对具有泛型 varargs 参数的方法或构造函数的调用方发出警告。
+- **@FunctionalInterface**：Java 8 中加入用于表示类型声明为函数式接口。
+
+### 定义注解 ###
+
+在下面的例子中，使用 `@Test` 对 `testExecute()` 进行注解。该注解本身不做任何事情，但是编译器要保证其类路径上有 `@Test` 注解的定义。
+
+```java
+public class Testable {
+    public void execute() {
+        System.out.println("Executing..");
+    }
+    @Test
+    void testExecute() { execute(); }
+}
+```
+
+如下是 `Test` 注解的定义，它看起来很像接口的定义。事实上，它们和其他 Java 接口一样，也会被编译成 class 文件。除了 @ 符号之外， `@Test` 的定义看起来更像一个空接口。
+
+```java
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Test { }
+```
+
+注解的定义也需要一些元注解（meta-annoation），比如 `@Target` 和 `@Retention`。
+
+注解通常会包含一些表示特定值的元素。当分析处理注解的时候，程序或工具可以利用这些值。注解的元素看起来就像接口的方法，但是可以为其指定默认值。
+
+不包含任何元素的注解称为**标记注解**（marker annotation），例如上例中的 `@Test` 就是标记注解。
+
+#### 元注解 ####
+
+Java 语言中目前有 5 种标准注解，以及 5 种元注解。元注解用于定义其他的注解。
+
+| 注解        | 解释                                                         |
+| ----------- | ------------------------------------------------------------ |
+| @Target     | 表示注解可以用于哪些地方。可能的 **ElementType** 参数包括： <br/>**CONSTRUCTOR**：构造器的声明<br/> **FIELD**：字段声明（包括 enum 实例）<br/> **LOCAL_VARIABLE**：局部变量声明 <br/> **METHOD**：方法声明 <br/> **PACKAGE**：包声明 <br/> **PARAMETER**：参数声明 <br/> **TYPE**：类、接口（包括注解类型）或者 enum 声明 |
+| @Retention  | 表示注解信息保存的时长。可选的 **RetentionPolicy** 参数包括： <br/>**SOURCE**：注解将被编译器丢弃。 <br/> **CLASS**：注解在 class 文件中可用，但是会被 VM 丢弃。<br/> **RUNTIME**：VM 将在运行期也保留注解，因此可以通过反射机制读取注解的信息。 |
+| @Documented | 将此注解保存在 Javadoc 中                                    |
+| @Inherited  | 允许子类继承父类的注解                                       |
+| @Repeatable | 允许一个注解可以被使用一次或者多次（Java 8）。               |
+
+大多数时候，程序员定义自己的注解，并编写自己的处理器来处理他们。
+
+### 编写注解处理器 ###
+
+如果没有用于读取注解的工具，那么注解将不会工作。使用注解中一个很重要的部分就是，创建与使用**注解处理器**。Java 拓展了反射机制的 API 用于帮助你创造这类工具。同时他还提供了 javac 编译器钩子在编译时使用注解。
+
+下面是一个简单的注解，拥有两个元素 **id** 和 **description**，**description** 属性拥有一个 **default** 值。
+
+```java
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface UseCase {
+    int id();
+    String description() default "no description";
+}
+```
+
+在下面的类中，有三个方法被 @UseCase 标注：
+
+```java
+public class PasswordUtils {
+    @UseCase(id = 47, description =
+            "Passwords must contain at least one numeric")
+    public boolean validatePassword(String passwd) {
+        return (passwd.matches("\\w*\\d\\w*"));
+    }
+    @UseCase(id = 48)
+    public String encryptPassword(String passwd) {
+        return new StringBuilder(passwd)
+                .reverse().toString();
+    }
+    @UseCase(id = 49, description =
+            "New passwords can't equal previously used ones")
+    public boolean checkForNewPassword(
+            List<String> prevPasswords, String passwd) {
+        return !prevPasswords.contains(passwd);
+    }
+}
+```
+
+下面是一个非常简单的注解处理器，我们用它来读取被注解的 **PasswordUtils** 类，并且使用反射机制来寻找 **@UseCase** 标记。给定一组 **id** 值，然后列出在 **PasswordUtils** 中找到的用例，以及缺失的用例。
+
+```java
+public class UseCaseTracker {
+    static void trackUseCases(List<Integer> useCases, Class<?> cl) {
+        for(Method m : cl.getDeclaredMethods()) {
+            UseCase uc = m.getAnnotation(UseCase.class);
+            if(uc != null) {
+                System.out.println("Found Use Case " +
+                        uc.id() + "\n " + uc.description());
+                useCases.remove(Integer.valueOf(uc.id()));
+            }
+        }
+        useCases.forEach(i ->
+                System.out.println("Missing use case " + i));
+    }
+    public static void main(String[] args) {
+        List<Integer> useCases = IntStream.range(47, 51)
+                .boxed().collect(Collectors.toList());
+        trackUseCases(useCases, PasswordUtils.class);
+    }
+}
+```
+
+这个程序用了两个反射的方法：`getDeclaredMethods()` 和 `getAnnotation()`，它们都属于 **AnnotatedElement** 接口（**Class**，**Method** 与 **Field** 类都实现了该接口）。`getAnnotation()` 方法返回指定类型的注解对象。
+
+#### 注解元素 ####
+
+在定义 **@UseCase** 时包含 int 元素 **id** 和 String 元素 **description**。注解元素可用的类型如下：
+
+- 所有基本类型（int、float、boolean等）
+- String
+- Class
+- enum
+- Annotation
+- 以上类型的数组
+
+如果你使用了其他类型，编译器就会报错。**注解也可以作为元素的类型**。
+
+#### 默认值限制 ####
+
+编译器对于元素的默认值有些过于挑剔。首先，元素不能有不确定的值。也就是说，元素要么有默认值，要么就在使用注解时提供元素的值。
+
+这里有另外一个限制：任何非基本类型的元素， 无论是在源代码声明时还是在注解接口中定义默认值时，都不能使用 null 作为其值。这个限制使得处理器很难表现一个元素的存在或者缺失的状态，因为在每个注解的声明中，所有的元素都存在，并且具有相应的值。为了绕开这个约束，可以自定义一些特殊的值，比如空字符串或者负数用于表达某个元素不存在。
+
+```java
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface SimulatingNull {
+    int id() default -1;
+    String description() default "";
+}// 这是一个在定义注解的习惯用法。
+```
+
+#### 注解不支持继承 ####
+
+不能使用 **extends** 关键字来继承 **@interfaces**。
+
+### 使用 javac 处理注解 ###
+
+
+
+#### 最简单的处理器 ####
+
+
+
+#### 更复杂的处理器 ####
+
+
+
+### 基于注解的单元测试 ###
+
+
+
+#### 在 @Unit 中使用泛型 ####
+
+
+
+#### 实现 @Unit ####
+
+
+
+
+

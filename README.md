@@ -7,9 +7,17 @@
 </div>
 
 
+## 数据结构和算法
+
+- 数据结构
+
+- 算法思想
+
+
+
 ## Java 语言 
 
-- [Java 基础](./docs/Java-foundation.md)
+- [Java 基础](./docs/Java基础.md)
 
 - Java 容器
 
@@ -23,22 +31,11 @@
 
 ## 数据库
 
-- 关系数据库
-- 标准 SQL
 - MySQL
-
-- NoSQL
 
 - Redis
 
   
-
-## 数据结构和算法
-
-- 八大数据结构
-- 八大基础排序
-
-
 
 ## 计算机网络
 
@@ -71,7 +68,7 @@
   - 系统接口
 - Linux 系统
   - 基本命令使用
-  - shell脚本
+  - shell 脚本
 
 ## 系统设计
 
@@ -90,7 +87,7 @@
 
 - [Spring Framework](./docs/Spring-Framework.md)
 - Springboot
-- Springcloud
+- Spring Cloud
 - Dubbo
 - Zookeeper
 - Mybatis
@@ -102,8 +99,9 @@
 
 - Tomcat
 - Nginx
+- Netty 
 
-- Netty 网络服务器
+
 
 ## 工具
 
@@ -111,12 +109,6 @@
 - Jenkins
 - Docker
 - K8s
-
-## 大数据与云计算(了解)
-
-- IaaS
-- PaaS
-- SaaS
 
 
 

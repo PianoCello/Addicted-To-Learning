@@ -1851,6 +1851,32 @@ public class IterableClass implements Iterable<String> {
 }
 ```
 
+### hashCode() 和 equals() ###
+
+当你创建一个类的时候，它自动继承自 **Objcet** 类。如果你不覆盖 **equals()** ，这个方法会比较对象的地址是否相等，区分度非常高。但是通常这不是我们想要的，我们想要的是比较对象内容是否相等，所以需要自己覆盖 **equals()** 方法。
+
+一个合适的 **equals()** 函数必须满足以下五点条件：
+
+1. 反身性：对于任何 **x**， **x.equals(x)** 应该返回 **true**。
+2. 对称性：对于任何 **x** 和 **y**， **x.equals(y)** 和 **y.equals(x)** 的返回值相同。
+3. 传递性：对于任何 **x**，**y**，**z**，如果 **x.equals(y)** 返回 **true** 并且 **y.equals(z)** 返回 **true**，那么 **x.equals(z)** 应该返回 **true**。
+4. 一致性：对于任何 **x** 和 **y**，在对象没有被改变的情况下，多次调用 **x.equals(y)** 应该总是返回 **true** 或者 **false**。
+5. 对于任何非 **null** 的 **x**，**x.equals(null)** 应该返回 **false**。
+
+覆盖 hashCode() 必须注意的点：
+
+- 基于对象的内容生成散列码，散列码不必是唯一的。
+- 好的 hashCode() 应该产生分布均匀的散列码。
+- 单个属性可以使用 Objects.hashCode()，多个属性可以使用 Objects.hash() 。
+
+**hashCode() 和 equals() 的关系（按照规范覆盖的情况下）**：
+
+- equals() 相等的两个对象他们的 hashCode() 肯定相等
+- hashCode() 相等的两个对象他们的 equals() 不一定相等
+- hashCode() 的效率比 equals() 高很多，所以**在散列的数据结构中比较两个对象是否相等的流程是：先比较 hashCode() 是否相等，如果相等，再比较 equals() 是否相等，前面的比较都相等的话则两个对象相等。**
+
+要使用散列的数据结构（HashSet，HashMap，LinkedHashst 和 LinkedHashMap）就必须正确为键覆盖 hashCode() 和 equals() 方法。
+
 #### 总结：Java 提供了许多保存对象的方法： ####
 
 1. 数组将数字索引与对象相关联。它保存类型明确的对象，因此在查找对象时不必对结果做类型转换。它可以是多维的，可以保存基本类型的数据。虽然可以在运行时创建数组，但是一旦创建数组，就无法更改数组的大小。

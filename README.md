@@ -9,9 +9,9 @@
 
 ## 数据结构和算法
 
-- 数据结构
+- [数据结构](./docs/数据结构.md)
 
-- 算法思想
+- [算法思想](./docs/算法思想.md)
 
 
 
@@ -19,9 +19,9 @@
 
 - [Java 基础](./docs/Java基础.md)
 
-- Java 容器
+- [Java 容器](./docs/Java容器.md)
 
-- Java I/O
+- [Java I/O](./docs/JavaIO.md)
 
 - [Java 并发编程](./docs/Java%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B.md)
 

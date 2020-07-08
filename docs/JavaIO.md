@@ -485,8 +485,8 @@ rwd：与 rws 类似，只是仅对文件的内容同步更新到磁盘，而不
 ```java
 public class BufferedInputFile {
     public static String read(String filename) {
-        try (BufferedReader in = new BufferedReader(
-                new FileReader(filename))) {
+        try (BufferedReader in = new BufferedReader(new FileReader(filename))) 
+        {
             return in.lines()
                     .collect(Collectors.joining("\n"));
         } catch (IOException e) {
@@ -505,7 +505,7 @@ public class BufferedInputFile {
 
 下面示例中，从 `BufferedInputFile.read()` 读入的 `String` 被用来创建一个 `StringReader` 对象。然后调用其 `read()` 方法，每次读取一个字符，并把它显示在控制台上：
 
-```
+```java
 public class MemoryInput {
     public static void main(String[] args) throws IOException {
         StringReader in = new StringReader(
@@ -520,23 +520,357 @@ public class MemoryInput {
 
 注意 `read()` 是以 `int` 形式返回下一个字节，所以必须类型转换为 `char` 才能正确打印。
 
-#### 格式化内存输入 ####
-
-
-
 #### 基本文件的输出 ####
 
+`FileWriter` 对象用于向文件写入数据。实际使用时，我们通常会用 `BufferedWriter` 将其包装起来以增加缓冲的功能（可以试试移除此包装来感受一下它对性能的影响——缓冲往往能显著地增加 I/O 操作的性能）。在本例中，为了提供格式化功能，它又被装饰成了 `PrintWriter`。按照这种方式创建的数据文件可作为普通文本文件来读取。
 
-
-#### 文本文件输出快捷方式 ####
-
-
+```java
+public class BasicFileOutput {
+    static String file = "BasicFileOutput.dat";
+    public static void main(String[] args) {
+        try (
+            BufferedReader in = new BufferedReader(
+                new StringReader(
+                     BufferedInputFile.read("BasicFileOutput.java")));
+                PrintWriter out = new PrintWriter(
+                    new BufferedWriter(new FileWriter(file)))
+        ) {
+            in.lines().forEach(out::println);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        // Show the stored file:
+        System.out.println(BufferedInputFile.read(file));
+    }
+}
+```
 
 #### 存储和恢复数据 ####
 
+`PrintWriter` 是用来对可读的数据进行格式化。但如果要输出可供另一个“流”恢复的数据，我们可以用 `DataOutputStream` 写入数据，然后用 `DataInputStream` 恢复数据。
 
+```java
+public class StoringAndRecoveringData {
+    public static void main(String[] args) {
+        try (
+            DataOutputStream out = new DataOutputStream(
+                new BufferedOutputStream(new FileOutputStream("Data.txt")))
+        ) {
+            out.writeDouble(3.14159);
+            out.writeUTF("That was pi");
+            out.writeDouble(1.41413);
+            out.writeUTF("Square root of 2");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        try (
+            DataInputStream in = new DataInputStream(
+                new BufferedInputStream(new FileInputStream("Data.txt")))
+        ) {
+            System.out.println(in.readDouble());
+            System.out.println(in.readUTF());
+            System.out.println(in.readDouble());
+            System.out.println(in.readUTF());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+如果我们使用 `DataOutputStream` 进行数据写入，那么 Java 就保证了即便读和写数据的平台多么不同，我们仍可以使用 `DataInputStream` 准确地读取数据，但是我们必须知道流中数据项所在的确切位置。
 
 #### 读写随机访问文件 ####
+
+使用 `RandomAccessFile` 就像是使用了一个 `DataInputStream` 和 `DataOutputStream` 的结合体（因为它实现了相同的接口：`DataInput` 和 `DataOutput`）。另外，我们还可以使用 `seek()` 方法移动文件指针并修改对应位置的值。
+
+在使用 `RandomAccessFile` 时，你必须清楚文件的结构，否则没法正确使用它。`RandomAccessFile` 有一套专门的方法来读写基本数据类型的数据和 UTF-8 编码的字符串：
+
+```java
+public class UsingRandomAccessFile {
+    static String file = "rtest.dat";
+    public static void display() {
+        try (
+            RandomAccessFile rf = new RandomAccessFile(file, "r")
+        ) {
+            for (int i = 0; i < 7; i++)
+                System.out.println("Value " + i + ": " + rf.readDouble());
+            System.out.println(rf.readUTF());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void main(String[] args) {
+        try (
+            RandomAccessFile rf = new RandomAccessFile(file, "rw")
+        ) {
+            for (int i = 0; i < 7; i++)
+                rf.writeDouble(i * 1.414);
+            rf.writeUTF("The end of the file");
+            rf.close();
+            display();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        try (
+            RandomAccessFile rf = new RandomAccessFile(file, "rw")
+        ) { //因为 double 是 8 字节，所以如果要用 seek() 定位到第 5 个 double 值
+            //则要传入的地址值应该为 5*8。
+            rf.seek(5 * 8);
+            rf.writeDouble(47.0001);
+            rf.close();
+            display();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+### 标准 I/O ###
+
+**标准 I/O ：指程序所使用的单一信息流。**
+
+程序的所有输入都可以来自于**标准输入**，其所有输出都可以流向**标准输出**，并且其所有错误信息均可以发送到**标准错误**。标准 I/O 的意义在于程序之间可以很容易地连接起来，一个程序的标准输出可以作为另一个程序的标准输入。
+
+Java 遵循标准 I/O 模型，提供了标准输入流 `System.in`、标准输出流 `System.out` 和标准错误流 `System.err`。
+
+### 从标准输入中读取 ###
+
+我们通常一次一行地读取输入。为了实现这个功能，将 `System.in` 包装成 `BufferedReader` 来使用，这要求我们用 `InputStreamReader` 把 `System.in` 转换成 `Reader` 。
+
+```java
+public class Echo {
+    public static void main(String[] args) {
+        new BufferedReader(new InputStreamReader(System.in))
+                .lines()
+                .forEach(System.out::println);
+    }
+}
+```
+
+### 将标准输出转换成 PrintWriter ###
+
+`System.out` 是一个 `PrintStream`，而 `PrintStream` 是一个`OutputStream`。 `PrintWriter` 有一个把 `OutputStream` 作为参数的构造器。因此，如果你需要的话，可以使用这个构造器把 `System.out` 转换成 `PrintWriter` 。
+
+```java
+public class ChangeSystemOut {
+    public static void main(String[] args) {
+        PrintWriter out = new PrintWriter(System.out, true);
+        out.println("Hello, world");
+    }
+}
+```
+
+要使用 `PrintWriter` 带有两个参数的构造器，并设置第二个参数为 `true`，从而使能自动刷新到输出缓冲区的功能；否则，可能无法看到打印输出。
+
+### 重定向标准 I/O ###
+
+Java 的 `System` 类提供了简单的 `static` 方法调用，从而能够重定向标准输入流、标准输出流和标准错误流：
+
+- setIn(InputStream)
+- setOut(PrintStream)
+- setErr(PrintStream)
+
+如果我们突然需要在显示器上创建大量的输出，而这些输出滚动的速度太快以至于无法阅读时，重定向输出就显得格外有用，可把输出内容重定向到文件中供后续查看。
+
+```java
+public class Redirecting {
+    public static void main(String[] args) {
+        PrintStream console = System.out;
+        try (
+                BufferedInputStream in = new BufferedInputStream(
+                        new FileInputStream("Redirecting.java"));
+                PrintStream out = new PrintStream(
+                        new BufferedOutputStream(
+                                new FileOutputStream("Redirecting.txt")))
+        ) {
+            //重定向
+            System.setIn(in);
+            System.setOut(out);
+            System.setErr(out);
+            //调用重定向之后的标准 I/O
+            new BufferedReader(new InputStreamReader(System.in))
+                    .lines()
+                    .forEach(System.out::println);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } finally {
+            System.setOut(console);
+        }
+    }
+}
+```
+
+该程序将文件中内容载入到标准输入，并把标准输出和标准错误重定向到另一个文件。它在程序的开始保存了最初对 `System.out` 对象的引用，并且在程序结束时将系统输出恢复到了该对象上。
+
+I/O 重定向操作的是字节流而不是字符流，因此使用 `InputStream` 和 `OutputStream`，而不是 `Reader` 和 `Writer`。
+
+
+
+## NIO ##
+
+Java 在 1.4 版本引入了 `java.nio.*` 类库。
+
+实际上，新 I/O 使用 **NIO**（同步非阻塞）的方式重写了老的 I/O 了，因此它获得了 **NIO** 的种种优点。即使我们不显式地使用 **NIO** 方式来编写代码，也能带来性能和速度的提高。这种提升不仅仅体现在文件读写（File I/O），同时也体现在网络读写（Network I/O）中。例如，网络编程。
+
+速度的提升来自于使用了更接近操作系统 I/O 执行方式的结构：**Channel**（通道） 和 **Buffer**（缓冲区）。我们可以想象一个煤矿：通道就是连接矿层（数据）的矿井，缓冲区是运送煤矿的小车。通过小车装煤，再从车里取矿。
+
+### Channel ###
+
+```
+java.nio.channels.Channel 接口：
+用于本地数据传输：
+    1. FileChannel
+用于网络数据传输：
+    1. SocketChannel
+    2. ServerSocketChannel
+    3. DatagramChannel
+获取通道
+    Java 针对支持通道的类提供了一个 getChannel() 方法。
+
+本地 IO 操作：
+    1. FileInputStream/FileOutputStream
+    2. RandomAccessFile
+网络 IO 操作：
+    1. Socket
+    2. ServerSocket
+    3. DatagramSocket
+在 JDK1.7 中的 NIO.2 针对各个通道提供了静态方法 open();
+在 JDK1.7 中的 NIO.2 的 Files 工具类的 newByteChannel();
+```
+
+### Buffer ###
+
+在 NIO 中，缓冲区的作用也是用来临时存储数据，可以理解为是 I/O 操作中数据的中转站。缓冲区直接为通道（Channel）服务，写入数据到通道或从通道读取数据，这样的操利用缓冲区数据来传递就可以达到对数据高效处理的目的。NIO 为七种基本数据类型（除了布尔类型）提供了对应的 Buffer（如 ByteBuffer、CharBuffer 等），还提供了专门用于内存映射的 **MappedByteBuffer**。
+
+有且仅有 **ByteBuffer**（保存原始字节的缓冲区）这一类型可直接与通道交互。它是相当基础的：通过初始化某个大小的存储空间，再使用一些方法以原始字节形式或原始数据类型来放置和获取数据。但是我们无法直接存放对象，即使是最基本的 **String** 类型数据。这是一个相当底层的操作，也正因如此，使得它与大多数操作系统的映射更加高效。
+
+所有缓冲区都有 4 个属性，并遵循：mark <= position <= limit <= capacity，下表格是对着4个属性的解释：
+
+| 属性     | 描述                                                         |
+| -------- | ------------------------------------------------------------ |
+| capacity | 容量，即可以容纳的最大数据量；在缓冲区创建时被设定并且不能改变 |
+| limit    | 表示缓冲区的当前终点，不能对缓冲区超过极限的位置进行读写操作。且极限是可以修改的 |
+| position | 位置，下一个要被读或写的元素的索引，每次读写缓冲区数据时都会改变改值，为下次读写作准备 |
+| mark     | 标记，调用 mark() 来设置 mark = position，再调用 reset() 可以让 position 恢复到标记的位置 |
+
+旧式 I/O 中的三个类分别被更新成 **FileChannel**（文件通道），分别是：**FileInputStream**、**FileOutputStream**，以及用于读写的 **RandomAccessFile** 类。
+
+下面使用上述三种类型的流生成可读、可写、可读/写的通道：
+
+```java
+public class GetChannel {
+    private static String name = "data.txt";
+    private static final int BSIZE = 1024;
+
+    public static void main(String[] args) {
+        // 写入一个文件:
+        try (
+                FileChannel fc = new FileOutputStream(name).getChannel()
+        ) {
+            fc.write(ByteBuffer.wrap("Some text ".getBytes()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        // 在文件尾添加：
+        try (
+                FileChannel fc = new RandomAccessFile(name, "rw").getChannel()
+        ) {
+            fc.position(fc.size()); // 移动到结尾
+            fc.write(ByteBuffer.wrap("Some more".getBytes()));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        // 读取文件e:
+        try (
+                FileChannel fc = new FileInputStream(name).getChannel()
+        ) {
+            ByteBuffer buff = ByteBuffer.allocate(BSIZE);
+            fc.read(buff);
+            buff.flip();
+            while (buff.hasRemaining()) {
+                System.out.write(buff.get());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        System.out.flush();
+    }
+}
+```
+
+#### 复制文件 ####
+
+```java
+//复制文件(使用非直接缓冲区)
+public static void testChannel(String src, String dest) {
+    try (
+            FileInputStream fis = new FileInputStream(src);
+            FileOutputStream fos = new FileOutputStream(dest);
+            FileChannel in = fis.getChannel();
+            FileChannel out = fos.getChannel();
+    ) {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+        //读取数据到缓冲区
+        while (in.read(byteBuffer) != -1) {
+            //转换成写模式
+            byteBuffer.flip();
+            //将缓冲区中的数据写出去
+            out.write(byteBuffer);
+            //清除缓冲区
+            byteBuffer.clear();
+        }
+      // 还可以直接连接此通道到彼通道
+      // in.transferTo(0, in.size(), out);
+      // 或者
+      // out.transferFrom(in, 0, in.size());
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+}
+```
+
+### 数据转换 ###
+
+
+
+### 基本类型获取 ###
+
+
+
+### 视图缓冲区 ###
+
+
+
+#### 字节存储次序 ####
+
+
+
+### 缓冲区数据操作 ###
+
+
+
+#### 缓冲区细节 ####
+
+
+
+### 内存映射文件 ###
+
+
+
+#### 性能 ####
+
+
+
+### 文件锁定 ###
+
+
+
+#### 映射文件的部分锁定 ####
+
+
 
 
 

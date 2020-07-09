@@ -834,15 +834,158 @@ public static void testChannel(String src, String dest) {
 
 ### 数据转换 ###
 
+ 使用 byteBuffer.asCharBuffer() 来转换成 CharBuffer 的时候，默认采用  `UTF-16BE` 来解码。
+
+- UTF-16BE 大端模式：Big-Endian 将高序字节存储在起始地址（高位编址）（默认）。
+- UTF-16LE 小端模式：Little-Endian 将低序字节存储在起始地址（低位编址）。
+
+```java
+class BufferToText {
+    private static final int BSIZE = 1024;
+    public static void main(String[] args) {
+        try (
+                FileChannel fc = new FileOutputStream("data2.txt").getChannel()
+        ) {
+            // 使用了系统默认的 UTF-8 编码
+            byte[] bytes = "Some text".getBytes();
+            fc.write(ByteBuffer.wrap(bytes));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        ByteBuffer buff = ByteBuffer.allocate(BSIZE);
+        try (
+                FileChannel fc = new FileInputStream("data2.txt").getChannel()
+        ) {
+            fc.read(buff);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        buff.flip();
+        // 出现乱码 --> 默认以 UTF-16BE 来将 ByteBuffer 解码成 CharBuffer，而编码时使用了系统默认的 UTF-8
+        System.out.println(buff.asCharBuffer());
+        // 使用系统默认编码格式进行解码
+        buff.rewind();
+        String encoding = System.getProperty("file.encoding");
+        System.out.println("Decoded using " + encoding + ": " + Charset.forName(encoding).decode(buff));
+
+        //---------------------------------------------
+        // 先编码再打印
+        try (
+                FileChannel fc = new FileOutputStream("data2.txt").getChannel()
+        ) {
+            fc.write(ByteBuffer.wrap("Some 			text".getBytes(StandardCharsets.UTF_16BE)));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        // 尝试再次读取：
+        buff.clear();
+        try (
+                FileChannel fc = new FileInputStream("data2.txt").getChannel()
+        ) {
+            fc.read(buff);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        buff.flip();
+        System.out.println(buff.asCharBuffer());
+
+        //------------------------------------------------
+        // 通过 CharBuffer 写入：
+        buff = ByteBuffer.allocate(24);
+        CharBuffer charBuffer = buff.asCharBuffer();
+        // CharBuffer 默认是以 UTF-16BE 编码
+        charBuffer.put("Some text");
+        try (
+                FileChannel fc = new FileOutputStream("data2.txt").getChannel()
+        ) {
+            fc.write(buff);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        // 读取和显示：
+        buff.clear();
+        try (
+                FileChannel fc = new FileInputStream("data2.txt").getChannel()
+        ) {
+            fc.read(buff);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        buff.flip();
+        System.out.println(buff.asCharBuffer());
+    }
+}
+```
+
 
 
 ### 基本类型获取 ###
 
+虽然 **ByteBuffer** 只包含字节，但它包含了一些方法，用于从其所包含的字节中生成各种不同的基本类型数据。代码示例：
 
+```java
+public class GetData {
+  private static final int BSIZE = 1024;
+  public static void main(String[] args) {
+    // 自动分配 0 到 ByteBuffer:
+    ByteBuffer bb = ByteBuffer.allocate(BSIZE);
+    // 保存和读取 char 数组:
+    bb.asCharBuffer().put("Howdy!");
+    char c;
+    while((c = bb.getChar()) != 0)
+      System.out.print(c + " ");
+    System.out.println();
+    bb.rewind();
+    // 保存和读取 short:
+    bb.asShortBuffer().put((short)471142);
+    System.out.println(bb.getShort());
+    bb.rewind();
+    // 保存和读取 int:
+    bb.asIntBuffer().put(99471142);
+    System.out.println(bb.getInt());
+    bb.rewind();
+    // 保存和读取 long:
+    bb.asLongBuffer().put(99471142);
+    System.out.println(bb.getLong());
+    bb.rewind();
+    // 保存和读取 float:
+    bb.asFloatBuffer().put(99471142);
+    System.out.println(bb.getFloat());
+    bb.rewind();
+    // 保存和读取 double:
+    bb.asDoubleBuffer().put(99471142);
+    System.out.println(bb.getDouble());
+    bb.rewind();
+  }
+}
+```
+
+将基本类型数据插入 **ByteBuffer** 的最简单方法就是使用 `asCharBuffer()`、`asShortBuffer()` 等方法获取该缓冲区适当的“视图”（View），然后调用该“视图”的 `put()` 方法。
 
 ### 视图缓冲区 ###
 
+“视图缓冲区”（view buffer）是通过特定的基本类型的窗口来查看底层 **ByteBuffer**。**ByteBuffer** 仍然是“支持”视图的实际存储，因此对视图所做的任何更改都反映在对 **ByteBuffer** 中的数据的修改中。下面是一个通过 **IntBuffer** 在 **ByteBuffer** 中操作 **int** 的例子：
 
+```java
+public class IntBufferDemo {
+  private static final int BSIZE = 1024;
+  public static void main(String[] args) {
+    ByteBuffer bb = ByteBuffer.allocate(BSIZE);
+    IntBuffer ib = bb.asIntBuffer();
+    // 保存 int 数组：
+    ib.put(new int[]{ 11, 42, 47, 99, 143, 811, 1016 });
+    //绝对位置读写：
+    System.out.println(ib.get(3));
+    ib.put(3, 1811);
+    // 在重置缓冲区前设置新的限制
+    ib.flip();
+    while(ib.hasRemaining()) {
+      int i = ib.get();
+      System.out.println(i);
+    }
+  }
+}
+```
 
 #### 字节存储次序 ####
 

@@ -747,15 +747,6 @@ java.nio.channels.Channel 接口：
 
 有且仅有 **ByteBuffer**（保存原始字节的缓冲区）这一类型可直接与通道交互。它是相当基础的：通过初始化某个大小的存储空间，再使用一些方法以原始字节形式或原始数据类型来放置和获取数据。但是我们无法直接存放对象，即使是最基本的 **String** 类型数据。这是一个相当底层的操作，也正因如此，使得它与大多数操作系统的映射更加高效。
 
-所有缓冲区都有 4 个属性，并遵循：mark <= position <= limit <= capacity，下表格是对着4个属性的解释：
-
-| 属性     | 描述                                                         |
-| -------- | ------------------------------------------------------------ |
-| capacity | 容量，即可以容纳的最大数据量；在缓冲区创建时被设定并且不能改变 |
-| limit    | 表示缓冲区的当前终点，不能对缓冲区超过极限的位置进行读写操作。且极限是可以修改的 |
-| position | 位置，下一个要被读或写的元素的索引，每次读写缓冲区数据时都会改变改值，为下次读写作准备 |
-| mark     | 标记，调用 mark() 来设置 mark = position，再调用 reset() 可以让 position 恢复到标记的位置 |
-
 旧式 I/O 中的三个类分别被更新成 **FileChannel**（文件通道），分别是：**FileInputStream**、**FileOutputStream**，以及用于读写的 **RandomAccessFile** 类。
 
 下面使用上述三种类型的流生成可读、可写、可读/写的通道：
@@ -964,44 +955,122 @@ public class GetData {
 
 ### 视图缓冲区 ###
 
-“视图缓冲区”（view buffer）是通过特定的基本类型的窗口来查看底层 **ByteBuffer**。**ByteBuffer** 仍然是“支持”视图的实际存储，因此对视图所做的任何更改都反映在对 **ByteBuffer** 中的数据的修改中。下面是一个通过 **IntBuffer** 在 **ByteBuffer** 中操作 **int** 的例子：
+“**视图缓冲区**”（view buffer）是通过特定的基本类型的窗口来查看底层 **ByteBuffer**。**ByteBuffer** 仍然是“支持”视图的实际存储，因此对视图所做的任何更改都反映在对 **ByteBuffer** 中的数据的修改中。一旦底层 **ByteBuffer** 通过视图缓冲区填充了 **int** 或其他基本类型，那么就可以直接将该 **ByteBuffer** 写入通道。你可以轻松地从通道读取数据，并使用视图缓冲区将所有内容转换为特定的基本类型。
 
 ```java
-public class IntBufferDemo {
-  private static final int BSIZE = 1024;
-  public static void main(String[] args) {
-    ByteBuffer bb = ByteBuffer.allocate(BSIZE);
-    IntBuffer ib = bb.asIntBuffer();
-    // 保存 int 数组：
-    ib.put(new int[]{ 11, 42, 47, 99, 143, 811, 1016 });
-    //绝对位置读写：
-    System.out.println(ib.get(3));
-    ib.put(3, 1811);
-    // 在重置缓冲区前设置新的限制
-    ib.flip();
-    while(ib.hasRemaining()) {
-      int i = ib.get();
-      System.out.println(i);
+class ViewBuffers {
+    public static void main(String[] args) {
+        ByteBuffer bb = ByteBuffer.wrap(new byte[]{0, 0, 0, 0, 0, 0, 0, 'a'});
+        bb.rewind();
+        System.out.print("Byte Buffer ");
+        while (bb.hasRemaining()) {
+            System.out.print(bb.position() + " -> " + bb.get() + ", ");
+        }
+        System.out.println();
+
+        CharBuffer cb = ((ByteBuffer) bb.rewind()).asCharBuffer();
+        System.out.print("Char Buffer ");
+        while (cb.hasRemaining()) {
+            System.out.print(cb.position() + " -> " + cb.get() + ", ");
+        }
+        System.out.println();
+
+        FloatBuffer fb = ((ByteBuffer) bb.rewind()).asFloatBuffer();
+        System.out.print("Float Buffer ");
+        while (fb.hasRemaining()) {
+            System.out.print(fb.position() + " -> " + fb.get() + ", ");
+        }
+        System.out.println();
+
+        IntBuffer ib = ((ByteBuffer) bb.rewind()).asIntBuffer();
+        System.out.print("Int Buffer ");
+        while (ib.hasRemaining()) {
+            System.out.print(ib.position() + " -> " + ib.get() + ", ");
+        }
+        System.out.println();
+
+        LongBuffer lb = ((ByteBuffer) bb.rewind()).asLongBuffer();
+        System.out.print("Long Buffer ");
+        while (lb.hasRemaining()) {
+            System.out.print(lb.position() + " -> " + lb.get() + ", ");
+        }
+        System.out.println();
+
+        ShortBuffer sb = ((ByteBuffer) bb.rewind()).asShortBuffer();
+        System.out.print("Short Buffer ");
+        while (sb.hasRemaining()) {
+            System.out.print(sb.position() + " -> " + sb.get() + ", ");
+        }
+        System.out.println();
+
+        DoubleBuffer db = ((ByteBuffer) bb.rewind()).asDoubleBuffer();
+        System.out.print("Double Buffer ");
+        while (db.hasRemaining()) {
+            System.out.print(db.position() + " -> " + db.get() + ", ");
+        }
+    }
+}
+```
+
+**ByteBuffer** 通过“包装”一个 8 字节数组生成，然后通过所有不同基本类型的视图缓冲区显示该数组。下图显示了从不同类型的缓冲区读取数据时，数据显示的差异：
+
+![view-buffer](../assets/java-foundation/view-buffer.png)
+
+#### 字节存储次序 ####
+
+不同的机器可以使用不同的字节存储顺序（Endians）来存储数据。“高位优先”（Big Endian）：将高位字节放在低内存地址中，而“低位优先”（Little Endian）：将低位字节放在低内存地址中。
+
+当存储大于单字节的数据时，如 **int**、**float** 等，我们可能需要考虑字节排序问题。**ByteBuffer** 以“高位优先”形式存储数据；通过网络发送的数据总是使用“高位优先”形式。我们可以使用 **ByteOrder** 的 `order()` 方法和参数 **ByteOrder.BIG_ENDIAN** 或 **ByteOrder.LITTLE_ENDIAN** 来改变它的字节存储次序。
+
+### 缓冲区数据操作 ###
+
+下图说明了 **nio** 类之间的关系，展示了如何移动和转换数据。
+
+![nio](../assets/java-foundation/nio.png)
+
+**ByteBuffer** 是将数据移入和移出通道的唯一方法，我们只能创建一个独立的基本类型缓冲区，或者使用 `as` 方法从 **ByteBuffer** 获得一个新缓冲区。也就是说，不能将基本类型缓冲区转换为 **ByteBuffer**。但我们能够通过视图缓冲区将基本类型数据移动到 **ByteBuffer** 中或移出 **ByteBuffer**。
+
+#### 缓冲区细节 ####
+
+缓冲区由数据和四个索引组成，以有效地访问和操作该数据：mark、position、limit 和 capacity（标记、位置、限制和容量）。伴随着的还有一组方法可以设置和重置这些索引，并可查询它们的值。
+
+缓冲区的 4 个索引遵循：**mark <= position <= limit <= capacity**
+
+| 方法                  | 描述                                                         |
+| --------------------- | ------------------------------------------------------------ |
+| **capacity()**        | 返回缓冲区的 capacity                                        |
+| **clear()**           | 清除缓冲区，将 position 设置为零并设 limit 为 capacity；可调用此方法来覆盖现有缓冲区 |
+| **flip()**            | 将 limit 设置为 position，并将 position 设置为 0；此方法用于准备缓冲区，以便在数据写入缓冲区后进行读取 |
+| **limit()**           | 返回 limit 的值                                              |
+| **limit(int limit)**  | 重设 limit                                                   |
+| **mark()**            | 设置 mark 为当前的 position                                  |
+| **position()**        | 返回 position                                                |
+| **position(int pos)** | 设置 position                                                |
+| **remaining()**       | 返回 limit 到 position                                       |
+| **hasRemaining()**    | 如果在 position 与 limit 中间有元素，返回 `true`             |
+
+### 内存映射文件 ###
+
+内存映射文件能让你创建和修改那些因为太大而无法放入内存的文件。有了内存映射文件，你就可以认为文件已经全部读进了内存，然后把它当成一个非常大的数组来访问。
+
+```java
+public class LargeMappedFiles {
+  static int length = 0x8000000; // 128 MB
+  public static void main(String[] args) throws Exception {
+    try(
+      RandomAccessFile tdat = new RandomAccessFile("test.dat", "rw")
+    ) {
+      MappedByteBuffer out = tdat.getChannel().map(
+        FileChannel.MapMode.READ_WRITE, 0, length);
+      for(int i = 0; i < length; i++)
+        out.put((byte)'x');
+      System.out.println("Finished writing");
+      for(int i = length/2; i < length/2 + 6; i++)
+        System.out.print((char)out.get(i));
     }
   }
 }
 ```
-
-#### 字节存储次序 ####
-
-
-
-### 缓冲区数据操作 ###
-
-
-
-#### 缓冲区细节 ####
-
-
-
-### 内存映射文件 ###
-
-
 
 #### 性能 ####
 

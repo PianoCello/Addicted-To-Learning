@@ -1051,6 +1051,8 @@ class ViewBuffers {
 
 ### 内存映射文件 ###
 
+内存映射使一个磁盘文件与存储空间的一个缓冲区相映射。于是当从缓冲区取数据，就相当于读文件中的相应字节。与此类似，将数据存入缓冲区，则相应文件就自动写入文件。这样就可以不使用 read() 和 write() 的情况下执行 I/O 。
+
 内存映射文件能让你创建和修改那些因为太大而无法放入内存的文件。有了内存映射文件，你就可以认为文件已经全部读进了内存，然后把它当成一个非常大的数组来访问。
 
 ```java
@@ -1074,15 +1076,172 @@ public class LargeMappedFiles {
 
 #### 性能 ####
 
+虽然旧的 I/O 流的性能通过使用 **NIO** 实现得到了改进，但是映射文件访问往往要快得多。
 
+```java
+public class MappedIO {
+    private static int numOfUbuffInts = 100_000;
+
+    private abstract static class Tester {
+        private String name;
+        Tester(String name) {
+            this.name = name;
+        }
+        public void runTest() {
+            System.out.print(name + ": ");
+            long start = System.nanoTime();
+            test();
+            double duration = System.nanoTime() - start;
+            System.out.format("%.3f%n", duration / 1.0e9);
+        }
+        public abstract void test();
+    }
+
+    private static Tester[] tests = {
+            new Tester("Stream Read/Write") {
+                @Override
+                public void test() {
+                    try (
+                            RandomAccessFile raf =
+                                    new RandomAccessFile(
+                                            new File("temp.tmp"), "rw")
+                    ) {
+                        raf.writeInt(1);
+                        for (int i = 0; i < numOfUbuffInts; i++) {
+                            raf.seek(raf.length() - 4);
+                            raf.writeInt(raf.readInt());
+                        }
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            },
+            new Tester("Mapped Read/Write") {
+                @Override
+                public void test() {
+                    try (
+                            FileChannel fc = new RandomAccessFile(
+                                    new File("temp.tmp"), "rw").getChannel()
+                    ) {
+                        IntBuffer ib =
+                                fc.map(FileChannel.MapMode.READ_WRITE,
+                                        0, fc.size()).asIntBuffer();
+                        ib.put(0);
+                        for (int i = 1; i < numOfUbuffInts; i++) {
+                            ib.put(ib.get(i - 1));
+                        }
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+    };
+
+    public static void main(String[] args) {
+        Arrays.stream(tests).forEach(Tester::runTest);
+    }
+}
+```
+
+**Tester** 使用了模板方法（Template Method）模式。文件映射中的所有输出必须使用 **RandomAccessFile**。
 
 ### 文件锁定 ###
 
+文件锁定可同步访问，因此文件可以共享资源。但是，争用同一文件的两个线程可能位于不同的 JVM 中，或者一个可能是 Java 线程，另一个可能是操作系统中的本机线程。文件锁对其他操作系统进程可见，因为 Java 文件锁定直接映射到本机操作系统锁定工具。
 
+```java
+public class FileLocking {
+  public static void main(String[] args) {
+    try(
+      FileOutputStream fos = new FileOutputStream("file.txt");
+      FileLock fl = fos.getChannel().tryLock()
+    ) {
+      if(fl != null) {
+        System.out.println("Locked File");
+        TimeUnit.MILLISECONDS.sleep(100);
+        fl.release();
+        System.out.println("Released Lock");
+      }
+    } catch(IOException | InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+  }
+}
+```
+
+通过调用 **FileChannel** 上的 `tryLock()` 或 `lock()`，可以获得整个文件的 **FileLock**。（**SocketChannel**、**DatagramChannel** 和 **ServerSocketChannel** 不需要锁定，因为它们本质上是单进程实体；通常不会在两个进程之间共享一个网络套接字）。
+
+`tryLock()` 是非阻塞的。它试图获取锁，若不能获取（当其他进程已经持有相同的锁，并且它不是共享的），它只是从方法调用返回。
+
+`lock()` 会阻塞，直到获得锁，或者调用 `lock()` 的线程中断，或者调用 `lock()` 方法的通道关闭。使用 **FileLock.**`release()` 释放锁。
+
+还可以使用
+
+> ```
+> tryLock(long position, long size, boolean shared)
+> ```
+
+或
+
+> ```
+> lock(long position, long size, boolean shared)
+> ```
+
+锁定文件的一部分，锁住 **size-position** 区域。第三个参数指定是否共享此锁。
+
+虽然零参数锁定方法适应文件大小的变化，但是如果文件大小发生变化，具有固定大小的锁不会发生变化。如果从一个位置到另一个位置获得一个锁，并且文件的增长超过了 position + size ，那么超出 position + size 的部分没有被锁定。零参数锁定方法锁定整个文件，即使它在增长。
 
 #### 映射文件的部分锁定 ####
 
+文件映射通常用于非常大的文件。你可能需要锁定此类文件的某些部分，以便其他进程可以修改未锁定的部分。例如，数据库必须同时对许多用户可用。这里你可以看到两个线程，每个线程都锁定文件的不同部分:
 
+```java
+class LockingMappedFiles {
+    static final int LENGTH = 0x8FFFFFF; // 128 MB
+    static FileChannel fc;
 
+    public static void main(String[] args) throws Exception {
+        fc = new RandomAccessFile("test.dat", "rw").getChannel();
+        MappedByteBuffer out = fc.map(FileChannel.MapMode.READ_WRITE, 0, LENGTH);
 
+        for (int i = 0; i < LENGTH; i++) {
+            out.put((byte) 'x');
+        }
+        new LockAndModify(out, 0, LENGTH / 3);
+        new LockAndModify(out, LENGTH / 2, LENGTH / 2 + LENGTH / 4);
+    }
 
+    private static class LockAndModify extends Thread {
+        private ByteBuffer buff;
+        private int start, end;
+
+        LockAndModify(ByteBuffer mbb, int start, int end) {
+            this.start = start;
+            this.end = end;
+            mbb.limit(end);
+            mbb.position(start);
+            buff = mbb.slice();
+            start();
+        }
+
+        @Override
+        public void run() {
+            try {
+                // Exclusive lock with no overlap:
+                FileLock fl = fc.lock(start, end, false);
+                System.out.println("Locked: " + start + " to " + end);
+                // Perform modification:
+                while (buff.position() < buff.limit() - 1) {
+                    buff.put((byte) (buff.get() + 1));
+                }
+                fl.release();
+                System.out.println("Released: " + start + " to " + end);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+}
+```
+
+**LockAndModify** 线程类设置缓冲区并创建要修改的 `slice()`，在 `run()` 中，锁在文件通道上获取。`lock()` 的调用非常类似于获取对象上的线程锁 —— 现在有了一个“临界区”，可以对文件的这部分进行独占访问。当 JVM 退出或关闭获取锁的通道时，锁会自动释放，但是你也可以显式地调用 **FileLock** 对象上的 `release()`，如上所示。

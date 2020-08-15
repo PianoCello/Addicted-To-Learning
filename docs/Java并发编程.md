@@ -85,25 +85,8 @@ public class LazyInitRace {
 
 换句话说，将**复合操作**转变成**原子操作**即可。
 
-也可以使用 Java 内置的**原子变量类**来管理类的状态：
-
-```java
-@ThreadSafe
-public class CountingFactorizer extends GenericServlet implements Servlet {
-    // 只有一个原子状态 线程安全
-    private final AtomicLong count = new AtomicLong(0);
-    public long getCount() { return count.get(); }
-    public void service(ServletRequest req, ServletResponse resp) {
-        BigInteger i = extractFromRequest(req);
-        BigInteger[] factors = factor(i);
-        count.incrementAndGet();
-        encodeIntoResponse(resp, factors);
-    }
-}
-```
-
 - 无状态对象一定是线程安全的。
-- 当在无状态的类中添加一个状态时，如果该状态完全由线程安全的对象来管理，那么这个类仍然是线程安全的。
+- 当在无状态的类中添加一个状态时，如果该状态完全由线程安全的对象来管理，那么这个类仍然是线程安全的，即将当前类的线程安全性**委托**给线程安全的状态变量。
 
 ### 加锁机制
 
@@ -375,23 +358,210 @@ public void initialize(){
 - 找出约束状态变量的不变性条件；
 - 建立对象状态的并发访问策略；
 
-要确保类的线程安全性，就必须确保它的**不变性条件**不会在并发访问的情况下被破坏。如果不变性条件设计到多个变量，那么这些相关的变量必须在单个原子操作中进行读取和更新。有时需要包含一些**后验条件**来判断状态迁移是否是有效的。
+要确保类的线程安全性，就必须确保它的**不变性条件**不会在并发访问的情况下被破坏。如果不变性条件涉及到多个变量，那么这些相关的变量必须在单个原子操作中进行读取和更新。有时需要包含一些**后验条件**来判断状态迁移是否是有效的。
 
-依赖状态的操作：对象中的某个操作包含基于状态的**先验条件**。例如，不能从空队列中移除一个元素，必须有先验条件判断它是非空的。要想实现某个等待先验条件为真时才进行的操作，可以使用阻塞队列（BlockingQueue）或信号量（Semaphore）。
+**依赖状态的操作**：对象中的某个操作包含基于状态的**先验条件**。例如，不能从空队列中移除一个元素，必须有先验条件判断它是非空的。要想实现某个等待先验条件为真时才进行的操作，可以使用阻塞队列（BlockingQueue）或信号量（Semaphore）。
 
 ### 实例封闭
 
+实例封闭：当一个对象被封装到另一个对象中时，能够访问被封装对象的所有代码路径都是已知的。
 
+被封闭的对象一定不能超出它们既定的作用域。对象可以封闭在类的一个实例（例如作为类的一个私有成员）中，或者封闭在某个作用域内（例如作为局部变量），在或者封闭在线程内（例如在某个线程中将对象从一个方法传递给另一个方法，而不是在线程间共享该对象）。
+
+下面是通过实例封闭来构造线程安全的类：
+
+```java
+@ThreadSafe
+public class PersonSet {
+    @GuardedBy("this") private final Set<Person> mySet = new HashSet<Person>();
+    public synchronized void addPerson(Person p) {
+        mySet.add(p);
+    }
+    public synchronized boolean containsPerson(Person p) {
+        return mySet.contains(p);
+    }
+}
+```
+
+注意：PersonSet 是线程安全的，Person 的线程安全性是未知的。
+
+Java 提供了很多实例封闭的类，例如 Collections.synchronizedXXX() 方法，这些工厂方法通过装饰器模式将不安全的容器类转成同步容器类。
+
+实例封闭可以使**不同的状态变量**可以由**不同的锁**来保护，前提是状态变量是相互独立的，不然会破坏不变性条件。同时，被封闭的对象不应该被发布。
 
 ### 线程安全性的委托
 
+线程安全的委托：在创建线程安全的类时，如果类中的状态已经是线程安全的，可以在**确保不变性条件不被破坏**的情况下将当前类的线程安全性**委托**给线程安全的状态变量。
 
+如下例子，CountingFactorizer 将线程安全性**委托**给 AtomicLong 类型的变量：
+
+```java
+@ThreadSafe
+public class CountingFactorizer extends GenericServlet implements Servlet {
+    // AtomicLong 是 Java 提供的线程安全的原子变量
+    private final AtomicLong count = new AtomicLong(0);
+    public long getCount() { return count.get(); }
+    public void service(ServletRequest req, ServletResponse resp) {
+        BigInteger i = extractFromRequest(req);
+        BigInteger[] factors = factor(i);
+        count.incrementAndGet();
+        encodeIntoResponse(resp, factors);
+    }
+}
+```
+
+将线程安全性委托给多个状态变量，需要注意，这里的状态变量是彼此独立的：
+
+```java
+public class VisualComponent {
+    private final List<KeyListener> keyListeners
+            = new CopyOnWriteArrayList<>();
+    private final List<MouseListener> mouseListeners
+            = new CopyOnWriteArrayList<>();
+
+    public void addKeyListener(KeyListener listener) {
+        keyListeners.add(listener);
+    }
+    public void addMouseListener(MouseListener listener) {
+        mouseListeners.add(listener);
+    }
+    public void removeKeyListener(KeyListener listener) {
+        keyListeners.remove(listener);
+    }
+    public void removeMouseListener(MouseListener listener) {
+        mouseListeners.remove(listener);
+    }
+}
+```
+
+#### 当委托失效时
+
+看下面这个例子：
+
+```java
+@NotThreadSafe
+public class NumberRange {
+    // 不变性条件为: lower <= upper
+    private final AtomicInteger lower = new AtomicInteger(0);
+    private final AtomicInteger upper = new AtomicInteger(0);
+    public void setLower(int i) {
+        // 不安全的“先检查后执行”
+        if (i > upper.get())
+            throw new IllegalArgumentException("");
+        lower.set(i);
+    }
+    public void setUpper(int i) {
+        // 不安全的“先检查后执行”
+        if (i < lower.get())
+            throw new IllegalArgumentException("");
+        upper.set(i);
+    }
+    public boolean isInRange(int i) {
+        return (i >= lower.get() && i <= upper.get());
+    }
+}
+```
+
+NumberRange 的不变性条件为 **lower <= upper**，不能简单的将它的线程安全性委托给状态变量，可以通过加锁来维护不变性条件，从而实现线程安全。
+
+#### 发布底层的状态变量
+
+如果一个状态变量是线程安全的，并且没有任何不变性条件来约束它的值，在变量的操作上也不存在任何不允许的状态转换，那么就可以安全地发布这个状态变量。
 
 ### 在现有的线程安全类中添加功能
 
+在大多数时候，我们应该重用类库提供的类（降低工作量、风险和维护成本）。当确实需要时，可以在**不破坏线程安全性的情况下**给现有的类添加新的功能。
 
+假设我们现在要给原有的类增加“**若没有则添加（putIfAbsent）**”的操作，有如下多种方法：
+
+- 最安全的方法是修改原始的类，但这通常无法做到；
+
+- 扩展原来的类，这种方式很脆弱，因为现在的同步策略实现被分布到多个单独维护的源代码中。如果底层的类改变了同步策略并选择了不同的锁来保护它的状态变量，那么子类会被破坏。
+
+  ```java
+  @ThreadSafe // 底层的 Vector 使用的锁是当前对象
+  public class BetterVector <E> extends Vector<E> {
+      public synchronized boolean putIfAbsent(E x) {
+          boolean absent = !contains(x);
+          if (absent)
+              add(x);
+          return absent;
+      }
+  }
+  ```
+
+- 客户端加锁机制，更加脆弱，因为它将某个类的加锁代码放到了与类完全无关的其他类中；
+
+  ```java
+  @ThreadSafe
+  class GoodListHelper <E> {
+      public List<E> list = Collections.synchronizedList(new ArrayList<>());
+      public boolean putIfAbsent(E x) {
+          // 底层的 list 使用的锁是当前对象，所以这里也需要使用相同的锁
+          synchronized (list) {
+              boolean absent = !list.contains(x);
+              if (absent)
+                  list.add(x);
+              return absent;
+          }
+      }
+  }
+  ```
+
+- 组合现有的类，推荐，ImprovedList 假设把构造参数传进来之后，客户代码就不会再直接使用这个对象，而只能通过 ImprovedList  来访问它；
+
+  ```java
+  @ThreadSafe
+  public class ImprovedList<T> implements List<T> {
+      private final List<T> list;
+      // PRE: list argument is thread-safe.
+      public ImprovedList(List<T> list) { this.list = list; }
+      public synchronized boolean putIfAbsent(T x) {
+          boolean contains = list.contains(x);
+          if (contains)
+              list.add(x);
+          return !contains;
+      }
+  }
+  ```
 
 ## 基础构件模块
+
+### 同步容器类
+
+
+
+### 并发容器类
+
+
+
+### 阻塞队列和生产者-消费者模式
+
+
+
+### 阻塞方法与中断方法
+
+
+
+### 同步工具类
+
+
+
+#### 闭锁
+
+
+
+#### 信号量
+
+
+
+#### 栅栏
+
+
+
+### 基础总结
+
+
 
 
 

@@ -139,6 +139,8 @@ class LoggingWidget extends Widget {
 
 当执行时间较长的计算或者可能无法快速完成的操作时（例如，网络 I/O 或控制台 I/O），一定不要持有锁。
 
+
+
 ## 对象的共享
 
 ### 内存可见性
@@ -348,6 +350,8 @@ public void initialize(){
 - **线程安全共享**：线程安全的对象在其内部实现同步，因此多个线程可以通过对象的公有接口来进行访问而不需要进一步的同步。
 - **保护对象**：被保护的对象只能通过持有特定的锁来访问。
 
+
+
 ## 对象的组合
 
 ### 设计线程安全的类
@@ -524,6 +528,8 @@ NumberRange 的不变性条件为 **lower <= upper**，不能简单的将它的�
        }
    }
    ```
+
+
 
 ## 基础构件模块
 
@@ -732,17 +738,261 @@ public class Test {
 }
 ```
 
+
+
 ## 任务执行
 
+### 在线程中执行任务
 
+在围绕“**任务执行**”来设计应用程序时，其关键是要找出**任务边界**。
+
+在正常的负载下，服务器应用程序应该同时表现出良好的吞吐量和快速的响应性，当负荷过载时，应用程序的性能应该是逐渐降低，而不是直接失败。
+
+#### 串行执行任务
+
+最简单的任务调度策略是在单个线程中串行地执行各项任务。
+
+```java
+public class SingleThreadWebServer {
+    public static void main(String[] args) throws IOException {
+        ServerSocket socket = new ServerSocket(80);
+        while (true) {
+            Socket connection = socket.accept();
+            handleRequest(connection);
+        }
+    }
+}
+```
+
+上面例子理论上是正确的，但是在生产环境的执行性能很糟糕，因为它每次只能处理一个请求。如果一个请求的执行时间很长的话，后面来的用户会认为服务器挂了。
+
+#### 显式地为任务创建线程
+
+通过为每个请求创建一个新的线程来提供服务，从而实现更高的响应性。
+
+```java
+public class ThreadPerTaskWebServer {
+    public static void main(String[] args) throws IOException {
+        ServerSocket socket = new ServerSocket(80);
+        while (true) {
+            final Socket connection = socket.accept();
+            Runnable task = () -> handleRequest(connection); // lambda
+            new Thread(task).start();
+        }
+    }
+}
+```
+
+- 任务处理过程从主线程中分离出来，使得主循环能更快地重新等待下一个到来的请求；
+- 任务可以并行处理，从而能同时服务多个请求；
+- 任务处理代码必须是线程安全的；
+- 在正常的负载下，这种方法能提升串行执行的性能，只要请求的到达速率不超出服务器的请求处理能力。
+
+无限制创建线程的不足：
+
+- **线程生命周期的开销非常高**；
+- **资源消耗**，活跃的线程会消耗系统资源，尤其是内存，如果可运行的线程数量多于可用的处理器的数量，那么有些线程将会闲置。如果已经有足够多的线程使所有的处理器保持忙绿，那么再创建更多的线程反而会降低性能。
+- 稳定性，在可创建线程的数量上存在一个限制，如果破坏限制可能会导致内存溢出。
+
+### Executor 框架
+
+**任务**是一组逻辑工作单元，**线程**是使任务异步执行的机制。
+
+在 Java 类库中，任务执行的主要抽象不是 Thread，而是 Executor。Executor 框架能支持多种不同类型的任务执行策略，它提供了一种标准的方法**将任务的提交过程和执行过程解耦**，并用 Runnable 来表示任务。**Executor 基于生产者-消费者模式**，提交任务的操作相当于生产者，执行任务的线程相当于消费者。
+
+```java
+public class TaskExecutionWebServer {
+    private static final int NTHREADS = 100;
+    // 基于线程池的 web 服务器
+    private static final Executor exec = Executors.newFixedThreadPool(NTHREADS);
+    public static void main(String[] args) throws IOException {
+        ServerSocket socket = new ServerSocket(80);
+        while (true) {
+            final Socket connection = socket.accept();
+            Runnable task = () -> handleRequest(connection);
+            exec.execute(task);
+        }
+    }
+}
+```
+
+#### 线程池
+
+线程池，是指管理一组同构工作线程的资源池。线程池是与**工作队列（Work Queue）**密切相关的，其中在工作队列中保存了所有等待执行的任务。**工作者线程（Work Thread）**的任务很简单：从工作队列中获得一个任务，执行任务，然后返回线程池并等待下一个任务。
+
+Executor 框架的两级调度模型：
+
+<img src="../assets/concurrency/Executor.png" alt="Executor" style="zoom:80%;" />
+
+在上层，Java 程序通过将应用分解为若干个**任务**，然后使用用户级的调度器（Executor）将 task 映射为固定数量的 Java 线程；在底层，Java 线程与操作系统的线程是一一对应的关系，由操作系统调度给可用的CPU，底层的调度不受上层的影响。
+
+Executor 框架工作流程如下图：
+
+<img src="../assets/concurrency/ExecutorService.jpg" alt="ExecutorService" style="zoom:80%;" />
+
+通过适当调整线程池的大小，可以创建足够多的线程以便**使处理器保持忙绿**状态，同时还可以**防止过多线程相互竞争资源**而使应用程序耗尽内存或失败。
+
+通过调用 Executors 中静态工厂方法之一来创建线程池：
+
+- **newFixedThreadPool**，将创建固定长度的线程池。适用于为了满足资源管理的需求，而需要限制当前线程数量的应用场景，它适用于负载比较重的服务器。
+- **newCachedThreadPool**，将创建一个可缓存的线程池。是大小无界的线程池，适用于执行很多的短期异步任务的小程序，或者是负载较轻的服务器。
+- **newSingleThreadExecutor**，是一个单线程的 Executor，能确保依照任务在队列中的**顺序**来串行执行（FIFO、LIFO、优先级）。
+- **newScheduledThreadPool**，创建了固定长度的线程池，而且以**延迟或定时**的方式来执行任务。
+
+ExecutorService 生命周期有 3 种状态：运行、关闭和已终止。
+
+### 找出可利用的并行性
+
+Executor 帮助指定执行策略，使用时要将任务表述为 Runnable。
+
+下面将实现浏览器程序中的页面渲染（Page-Rendering）功能，它的作用是将 HTML 页面绘制到图像缓存中，HTML 页面只包含文本和图片。
+
+#### 串行的页面渲染器
+
+```java
+public abstract class SingleThreadRenderer {
+    public void renderPage(CharSequence source) {
+        renderText(source); // 渲染文本
+        List<ImageData> imageData = new ArrayList<ImageData>();
+        for (ImageInfo imageInfo : scanForImageInfo(source))
+            imageData.add(imageInfo.downloadImage());
+        for (ImageData data : imageData)
+            renderImage(data); //渲染图片
+    }
+}
+```
+
+图片下载过程的大部分时间都是在等待 I/O 操作执行完成，没有充分利用 CPU。
+
+#### 携带结果的任务 Callable 和 Future
+
+**Callable 可以有返回值，并且可以抛出一个异常**。Runnable 和 Callable 描述的都是抽象的计算任务。这些任务通常都是有范围的，有明确的起始点和终点。 
+
+**Future 表示一个任务的生命周期**，并提供了相应的方法来判断是否已经完成或取消，以及获取任务的结果和取消任务等。get 方法用于获取任务的返回值，没完成的任务将一直等待或者抛出异常。
+
+ExecutorService 中的所有 submit 方法都将返回一个 Future，从而将一个 Runnable 或 Callable 提交给 Executor，并得到一个 Future 来获得任务的执行结果或者取消任务。
+
+#### 使用 Future 实现页面渲染器
+
+```java
+public abstract class FutureRenderer {
+    // 缓存线程池
+    private final ExecutorService executor = Executors.newCachedThreadPool();
+    public void renderPage(CharSequence source) {
+        final List<ImageInfo> imageInfos = scanForImageInfo(source);
+        Callable<List<ImageData>> task = () -> {
+                    List<ImageData> result = new ArrayList<>();
+                    for (ImageInfo imageInfo : imageInfos)
+                        result.add(imageInfo.downloadImage());
+                    return result;
+                };
+        // 在渲染文本的同时也在下载图片
+        Future<List<ImageData>> future = executor.submit(task);
+        renderText(source); // 渲染文本
+        try {
+            List<ImageData> imageData = future.get();
+            for (ImageData data : imageData)
+                renderImage(data); // 渲染图片
+        } catch (InterruptedException e) {
+            // 重新设置线程的中断状态
+            Thread.currentThread().interrupt();
+            // 取消任务
+            future.cancel(true);
+        } catch (ExecutionException e) {
+            throw launderThrowable(e.getCause());
+        }
+	}
+}
+```
+
+这个代码的问题是等到所有图片都下载完了才开始渲染图片。
+
+#### 使用 CompletionService 实现页面渲染
+
+CompletionService 将 Executor 和 BlockingQueue 的功能融合在一起。
+
+在实现上，ExecutorCompletionService 在构造函数中会创建 LinkedBlockingQueue，该队列的作用是保存 Executor 执行的结果。当计算完成时，调用 FutureTask 的 done 方法。当提交一个任务到ExecutorCompletionService 时，首先将任务包装成 QueueingFuture，它是 FutureTask 的一个子类，然后改写 FutureTask 的 done 方法，之后把 Executor 执行的计算结果放入 BlockingQueue 中。
+
+```java
+public abstract class Renderer {
+    private final ExecutorService executor;
+    Renderer(ExecutorService executor) {
+        this.executor = executor;
+    }
+    
+    public void renderPage(CharSequence source) {
+        final List<ImageInfo> info = scanForImageInfo(source);
+        CompletionService<ImageData> completionService =
+                new ExecutorCompletionService<>(executor);
+        for (final ImageInfo imageInfo : info)
+            // 将每张图片信息分解成独立的任务提交
+            completionService.submit(() -> imageInfo.downloadImage());
+	    // 渲染文本
+        renderText(source);
+        try {
+            for (int t = 0, n = info.size(); t < n; t++) {
+                Future<ImageData> f = completionService.take();
+                ImageData imageData = f.get();
+                // 每当下载了一张图片就渲染
+                renderImage(imageData);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            throw launderThrowable(e.getCause());
+        }
+    }
+}
+```
 
 
 
 ## 取消与关闭
 
+### 任务取消
+
+
+
+### 停止基于线程的服务
+
+
+
+### 处理非正常的线程终止
+
+
+
+### JVM 关闭
+
+
+
 
 
 ## 线程池的使用
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

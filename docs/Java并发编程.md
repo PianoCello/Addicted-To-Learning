@@ -951,21 +951,198 @@ public abstract class Renderer {
 
 ### 任务取消
 
+操作被取消的原因有很多，比如超时，异常，请求被取消等等。
 
+**可取消的任务**必须拥有**取消策略（Cancellation Policy）**：如何请求取消该任务，何时检查是否请求了取消，以及在响应取消请求时应该执行哪些操作。
 
-### 停止基于线程的服务
+#### 使用 volatile 状态变量来控制
 
+```java
+@ThreadSafe
+public class PrimeGenerator implements Runnable {
+    private static final ExecutorService exec = Executors.newCachedThreadPool();
+    @GuardedBy("this")
+    private final List<BigInteger> primes = new ArrayList<>();
+    // 必须是 volatile 类型的，保证内存可见性
+    private volatile boolean cancelled;
+    public void run() {
+        BigInteger p = BigInteger.ONE;
+        while (!cancelled) {
+            p = p.nextProbablePrime();
+            synchronized (this) {
+                primes.add(p);
+            }
+        }
+    }
+    // 取消任务的方法
+    public void cancel() { cancelled = true;}
+    public synchronized List<BigInteger> get() {
+        return new ArrayList<>(primes);
+    }
+    static List<BigInteger> aSecondOfPrimes() throws InterruptedException {
+        PrimeGenerator generator = new PrimeGenerator();
+        exec.execute(generator);
+        try {
+            SECONDS.sleep(1);
+        } finally {
+            generator.cancel();
+        }
+        return generator.get();
+    }
+}
+```
 
+其取消策略为：通过改变取消标志位取消任务，任务在每次生成下一随机素数之前检查任务是否被取消，被取消后任务将退出。
+
+**然而，该机制最大的问题就是无法应用于阻塞方法**，例如 BlockingQueue.put()。可能会产生一个很严重的问题——**任务可能因阻塞而永远无法检查取消标识，导致任务永远不会结束。**
+
+#### 中断机制
+
+线程中断是一种协作机制，线程可以通过这种机制来**通知**另一个线程，告诉它在合适的或者可能情况下停止当前工作。**中断是实现取消的最合理方式**。
+
+对中断操作的正确理解是：**它并不会真正的中断线程，而是给线程发出中断通知，告知目标线程有人希望你退出。目标线程收到通知后如何处理完全由目标线程自行决定，这是非常重要的。线程收到中断通知后，通常会在下一个合适的时刻（被称为取消点）中断自己**。有些方法，如 wait、sleep 和 join 等将严格地处理这种请求，当它们收到中断请求或者在开始执行时发现某个已被设置好的中断状态时，将抛出中断异常。
+
+```java
+public class PrimeProducer extends Thread {
+    private final BlockingQueue<BigInteger> queue;
+    PrimeProducer(BlockingQueue<BigInteger> queue) {
+        this.queue = queue;
+    }
+    public void run() {
+        try {
+            BigInteger p = BigInteger.ONE;
+            // 主动查询中断状态可以提高响应度
+            while (!Thread.currentThread().isInterrupted())
+                // 阻塞方法也会检测到中断状态并抛出中断异常
+                queue.put(p = p.nextProbablePrime());
+        } catch (InterruptedException consumed) {
+            /* Allow thread to exit */
+        }
+    }
+	// 其他线程调用此方法来中断这个线程
+    public void cancel() { interrupt();}
+}
+```
+
+**中断策略**：发现中断请求时应该做什么，以多快速度来响应中断。
+
+区分任务和线程对中断的反应是很重要的。一个中断请求可以有一个或多个接收者，例如，**中断线程池中的某个工作者线程， 则意味着取消了当前任务，同时也意味着关闭了工作者线程**。
+
+无论任务把中断视为取消，还是其它某个中断响应操作，都应该小心地保存执行线程的中断状态。如果除了将中断异常传递给调用者外，还需要进行其它操作，则因该在捕获中断异常之后恢复中断状态。
+
+```java
+Thread.currentThread().interrupt();
+```
+
+**响应中断**
+
+当调用可中断的阻塞函数时，例如 Thread.sleep 或者 BlockingQueue.put 等，有两种实用策略可用于响应中断：
+
+- 传递异常（可能在执行某个特定于任务的清除操作之后），从而使你的方法也成为可中断的阻塞方法。
+
+  ```java
+  BlockingQueue<Task> queue;
+  //抛出 InterruptedException，从而将中断传递给调用者
+  public Task getNextTask() throws InterruptedException{
+      return queue.take();
+  }
+  ```
+
+- 恢复中断状态，从而使调用栈中的上层代码能够对其进行处理。不可取消的任务在退出前恢复中断：
+
+  ```java
+  public TaskgetNextTask(BlockingQueue<Task> queue){
+     boolean interrupted = false;
+     try{
+        while(true){
+            try{
+                return queue.take();
+            } catch (InterruptedException e){
+               interrupted = true;
+               // 重新尝试
+            }
+        }
+     } finaly {
+        if (interrupted) 
+            Thread.currentThread().interrupt();
+     }
+  }
+  ```
+
+  如果代码不会调用可中断的阻塞方法，那么仍然可以通过在任务代码中轮询当前线程的中断状态来响应中断。要选择合适的轮询频率，就需要在效率和响应性之间进行权衡。
+
+#### 通过 Future 来实现取消
+
+Future 用来管理任务的**生命周期**，处理异常，也可以实现取消。通常，使用现有库中的类比自行实现更好，所以我们可以直接使用 Future 来实现任务的取消。
+
+当 Future.get 抛出 InterruptedException 或 TimeoutException 时，如果不再需要结果，那么就可以使用 Future.cancel 来取消任务。这是一种良好的编程习惯。
+
+```java
+/**
+ * 通过 Future 来取消任务
+ */
+public class TimedRun {
+    private static final ExecutorService taskExec = Executors.newCachedThreadPool();
+
+    public static void timedRun(Runnable r, long timeout, TimeUnit unit) 
+        throws InterruptedException {
+        Future<?> task = taskExec.submit(r);
+        try {
+            task.get(timeout, unit);
+        } catch (TimeoutException e) {
+            // 因超时而取消任务
+        } catch (ExecutionException e) {
+            // 任务异常，重新抛出异常信息
+            throw launderThrowable(e.getCause());
+        } finally {
+            // 如果该任务已经完成，将没有影响
+            // 如果任务正在运行，将因为中断而被取消
+            task.cancel(true); // interrupt if running
+        }
+    }
+}
+```
+
+**处理不可中断的阻塞**
+
+如果一个线程由于**执行同步的 Socket I/O** 或者**等待获得内置锁**而阻塞，那么中断请求只能设置线程的中断状态，除此之外没有其他任何作用。可以使用类似于中断的手段来停止这些线程，但这要求我们必须知道线程阻塞的原因。以下是不可中断阻塞的情况：
+
+- **java.io 包中的同步 Socket I/O**。通过关闭底层的套接字，可以使得由于执行 read 或 write 等方法而被阻塞的线程抛出一个 SocketException。
+- **java.io 包中的同步 I/O**。如当中断或关闭正在 InterruptibleChannel 上等待的线程时，会对应抛出 ClosedByInterruptException 或 AsynchronousCloseException。
+- **Selector 的异步 I/O**。如果一个线程在调用 Selector.select 时阻塞了，那么调用 close 或 wakeup 会使线程抛出 ClosedSelectorException 并提前返回。
+- **获取某个锁**。当一个线程等待某个锁而阻塞时，不会响应中断。但 Lock 类的 lockInterruptibly 允许在等待锁时响应中断。
 
 ### 处理非正常的线程终止
 
+导致线程提前死亡的最主要原因就是 RuntimeException。由于这些异常表示出现了某种编程错误或者其它不可修复的错误，因此它们通常不会被捕获。它们不会再调用栈中逐层传递，而是默认在控制台中输出栈追踪信息，并终止线程。
 
+**未捕获异常处理器**：UncaughtExceptionHandler，它能检测出某个由于未捕获的异常而终结的情况。当一个线程由于未捕获异常而退出时，JVM 会把这个事件报告给 UncaughtExceptionHandler 异常处理器，如果没有提供异常处理器，那么默认的行为是将追踪信息输出到 Sytem.err，即控制台。
 
-### JVM 关闭
+```java
+/**
+ * 将异常写入日志的 UncaughtExceptionHandler
+ */
+public class UEHLogger implements Thread.UncaughtExceptionHandler {
 
+    public void uncaughtException(Thread t, Throwable e) {
+        Logger logger = Logger.getAnonymousLogger();
+        logger.log(Level.SEVERE, "Thread terminated with exception: " + t.getName(), e);
+    }
 
+}
+```
 
+则在使用时只需要为线程设置一个 UncaughtExceptionHandler 即可。
 
+```java
+Thread thread=new Thread();
+thread.setUncaughtExceptionHandler(new UEHLogger()); 
+thread.start();
+```
+
+在运行时间较长的应用程序中，通常会为所有线程的未捕获异常指定同一个异常处理器，并且该处理器异常至少会将异常信息记录到日志中。
+
+要为线程池中的所有线程设置一个 UncaughtExceptionHandler，只需要为 ThreadPoolExecutor 的构造函数提供一个 ThreadFactory。
 
 ## 线程池的使用
 

@@ -19,6 +19,10 @@
 
 - [Java 基础](./docs/Java基础.md)
 
+- [函数式接口和流](./docs/函数式接口和流.md)
+
+- [泛型枚举注解](./docs/泛型枚举注解.md)
+
 - [Java 容器](./docs/Java容器.md)
 
 - [Java I/O](./docs/JavaIO.md)
